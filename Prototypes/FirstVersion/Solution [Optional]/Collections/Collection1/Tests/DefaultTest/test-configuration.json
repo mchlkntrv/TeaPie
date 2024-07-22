@@ -1,0 +1,11 @@
+{
+    "retrying": {
+        "retrying": true,
+        "retryingCount": 3
+    },
+    "await": {
+        "awaitResponse": true,
+        "delayTestFor": 2500,
+        "maxWaitingPeriod": 1000
+    }
+}

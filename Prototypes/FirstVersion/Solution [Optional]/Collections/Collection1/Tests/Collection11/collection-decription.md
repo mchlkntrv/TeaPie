@@ -1,0 +1,1 @@
+**Delivery Notes** - Tests collection dedicated for micro-service handling `DeliveryNotes`

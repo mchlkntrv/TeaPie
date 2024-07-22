@@ -1,0 +1,1 @@
+This test creates necessary entity of type 2.

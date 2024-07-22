@@ -1,0 +1,8 @@
+{
+    "retrying": true,
+    "retryingCount": 3,
+    "awaitInMiliseconds": 2000,
+    "collectionsOrder": [
+        "DeliveryNote-CRUD"
+    ]
+}

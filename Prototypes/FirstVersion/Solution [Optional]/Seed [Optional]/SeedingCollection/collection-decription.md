@@ -1,0 +1,1 @@
+This collection is used for seeding purposes.

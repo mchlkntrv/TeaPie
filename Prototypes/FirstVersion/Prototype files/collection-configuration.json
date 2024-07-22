@@ -1,0 +1,21 @@
+{
+    "ignore": {
+        "ignoreCollections": [ "CollectionName1", "CollectionName3" ],
+        "ignoreTests": [ "TestName2", "TestName4" ]
+    },
+    "testsOrder": [
+        "CollectionName4",
+        "TestName3",
+        "CollectionName2",
+        "TestName1"
+    ],
+    "retrying": {
+        "retrying": true,
+        "retryingCount": 3
+    },
+    "await": {
+        "awaitResponse": true,
+        "delayTestFor": 2500,
+        "maxWaitingPeriod": 1000
+    }
+}

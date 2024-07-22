@@ -1,0 +1,28 @@
+{
+    "ignore": {
+        "ignoreCollections": [
+            "Collection1",
+            "OnlyTestCollection",
+            "MySandbox"
+        ],
+        "ignoreTests": [
+            "ApiTest",
+            "TralalalaTest"
+        ]
+    },
+    "collectionsOrder": [
+        "Seed",
+        "DeliveryNotes",
+        "Project",
+        "Invoicing"
+    ],
+    "retrying": {
+        "retrying": true,
+        "retryingCount": 3
+    },
+    "await": {
+        "awaitResponse": true,
+        "delayTestFor": 2500,
+        "maxWaitingPeriod": 1000
+    }
+}

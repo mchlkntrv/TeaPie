@@ -1,0 +1,19 @@
+{
+    "name": "Production",
+    "version": "1.0",
+    "variables": [
+        {
+            "name": "ApiGateway-Base-Url",
+            "value": "https://www.my-url.com/"
+        },
+        {
+            "name": "Username",
+            "value": "JohnyPea"
+        },
+        {
+            "name": "Password",
+            "value": "MyPassword",
+            "secret": true
+        }
+    ]    
+}

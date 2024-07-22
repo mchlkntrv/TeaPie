@@ -1,0 +1,14 @@
+[
+    {
+        "name": "MyCompanyId",
+        "value": 125
+    },
+    {
+        "name": "SpecificEndpoint",
+        "value": "/specific/endpoint"
+    },
+    {
+        "name": "Username",
+        "value": "MyName"
+    }
+]  

@@ -1,0 +1,21 @@
+{
+    "ignore": {
+        "ignoreCollections": [],
+        "ignoreTests": []
+    },
+    "testsOrder": [
+        "Seed",
+        "CreateEntity1",
+        "GetEntity1",
+        "DeleteEntity1"
+    ],
+    "retrying": {
+        "retrying": true,
+        "retryingCount": 3
+    },
+    "await": {
+        "awaitResponse": true,
+        "delayTestFor": 2500,
+        "maxWaitingPeriod": 1000
+    }
+}

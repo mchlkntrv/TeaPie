@@ -1,0 +1,164 @@
+
+POST https://esw-testlab-gateway-api.azurewebsites.net/companies/46446/deliverynotes
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6ImJYT0VlMTVZb3ZDUG1hbmtJZ3MzUWciLCJ0eXAiOiJhdCtqd3QifQ.eyJuYmYiOjE3MjE2MjcxMzgsImV4cCI6MTcyMTYzNDMzOCwiaXNzIjoiaHR0cHM6Ly9sb2dpbi5rcm9zLnd0ZiIsImF1ZCI6IkVzdy5JbnZvaWNpbmciLCJjbGllbnRfaWQiOiJXYXJlaG91c2VXZWJBcHAiLCJzdWIiOiI0MjE5IiwiYXV0aF90aW1lIjoxNzIwNDMxNDY5LCJpZHAiOiJsb2NhbCIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL2VtYWlsYWRkcmVzcyI6Imdyb2NoYWxAa3Jvcy5zayIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL3NpZCI6IjQyMTkiLCJzY29wZSI6WyJvcGVuaWQiLCJwcm9maWxlIiwiZW1haWwiLCJFc3cuSW52b2ljaW5nIl0sImFtciI6WyJwd2QiXX0.h8umwYyf3v9X5559ROMx-xHmouZc7VutmaGipyl5wnie509auaw7u4qYKpUZyyZJU2AUf2reZ-Hdczv0QKqE8Fq_S4WZ-icH7cS_t_yOO5Z5HtEBFkb_uh6E7yRThWSLhKejproBojEyJZCfjYlfZ5RVCOgPhSfmkCNFMMEwb9rMtaPdgNOa83sklOJ-U6fLW5-_oss0d6Hg8PGNGD2byYSU7MceAiwcx9kwtFSfBFoxKpov0zui-8RxznuZ5kIqVjojFDyq1hPtX_DF4M7QcZIIn6bhuiaoY8mFeyhpXMCroGtqOWBM-2LgaPl3q1m-J2kSqLVV57fG-ldXOSoSKw
+Cache-Control: no-cache
+
+{
+    "isDocumentNumberChangedByUser": true,
+	"documentNumber" : "2019001",
+	"numberingSequence" : "DL",
+	"printedNote": "",
+	"issueDate" : "2019-01-01T00:00:00.000Z",
+	"invoiceNumber" : "2019002",
+	"orderNumber" : "2019003",
+	"openingTextTranslations" : {"sk-SK": "open"},
+	"closingTextTranslations" : {"sk-SK": "close"},
+	"registrationCourtTextTranslations" : {"sk-SK": "register"},
+	"totalPrice" : 100,
+	"totalPriceInclVat" : 120,
+	"vatTotalPrice" : 20,
+	"vatPayerType": 1,
+	"isTotalPriceInclVat": false,
+	"isUnitPriceInclVat": false,
+	"discountType": 1,
+	"discountPercent": 50,
+	"discountTotalPrice": 12,
+	"discountTotalPriceInclVat": 100,
+	"totalPriceInclVatBeforeDiscount": 120,
+	"totalPriceBeforeDiscount": 100,
+    "totalWeight": 15,
+    "useParagraph7or7a": false,
+    "culture": "",
+    "lockType": 0,
+    "migrationSystemType" : "Kros.iKros",
+	"supplier" : {
+		"registrationId" : "12345",
+		"taxId" : "54321",
+		"vatId" : "SK54321",
+		"phoneNumber" : "915123456789",
+		"email" : "email@email.com",
+		"web" : "https://www.email.com",
+        "ossTaxState" : 0,
+		"address": {
+			"businessName" : "Top1",
+			"contactName" : "Office",
+			"street" : "Bridge",
+			"postCode" : "58745",
+			"city" : "Zilina",
+			"country" : "Slovak"
+		},
+		"postalAddress": {
+			"businessName" : "TopPostal",
+			"contactName" : "OfficePostal",
+			"street" : "BridgePostal",
+			"postCode" : "58745",
+			"city" : "Zilina",
+			"country" : "Slovak"
+		}
+	},
+	"purchaser" : {
+	    "id" : 402696,
+		"registrationId" : "123456",
+		"taxId" : "654321",
+		"vatId" : "SK654321",
+		"phoneNumber" : "000123456789",
+		"email" : "email2@email.com",
+		"web" : "https://www.email2.com",
+		"address": {
+			"businessName" : "Top2",
+			"contactName" : "Office2",
+			"street" : "Bridge2",
+			"postCode" : "00000",
+			"city" : "Brno",
+			"country" : "Czech"
+		},
+		"postalAddress": {
+			"businessName" : "TopPostal",
+			"contactName" : "OfficePostal",
+			"street" : "BridgePostal",
+			"postCode" : "58745",
+			"city" : "Zilina",
+			"country" : "Slovak"
+		}
+	},
+	"items" : 
+	[
+		{
+		  "id": -1,
+	      "name": "Zidle",
+	      "ordinal": 1,
+	      "description": "Krasna",
+	      "amount": 10,
+		  "catalogId": 1504529,
+	      "measureUnit": "Kamion",
+	      "baseUnitPriceBeforeDiscount": 10,
+	      "baseUnitPriceInclVatBeforeDiscount": 12,
+	      "unitPrice": 10,
+	      "unitPriceInclVat": 12,
+	      "totalPrice": 150,
+	      "totalPriceInclVat": 180,
+	      "vatRate": 20,
+	      "discountPercent": 0,
+	      "discountUnitPrice": 0,
+	      "discountUnitPriceInclVat": 0,
+	      "unitPriceBeforeDiscount": 10,
+	      "unitPriceInclVatBeforeDiscount": 12,
+	      "discountTotalPrice": 0,
+	      "discountTotalPriceInclVat": 0,
+	      "totalPriceBeforeDiscount": 150,
+	      "totalPriceInclVatBeforeDiscount": 180,
+	      "discountName": "",
+          "itemCode": "code1",
+          "stockItemType": 1,
+          "warehouseId": null,
+          "warehouseCode": "",
+          "baseUnitWeight": 1.5,
+          "totalWeight": 15,
+          "prices": {
+            "legislative": {
+                "unitPriceBeforeDiscount": 20,
+                "unitPriceInclVatBeforeDiscount": 30,
+                "totalPriceBeforeDiscount": 30,
+                "totalPriceInclVatBeforeDiscount": 30
+            } 
+          },
+          "baseMeasureUnit": {
+              "amount": 10,
+              "name":  "liter",
+              "ratio": 1
+          }
+	    }	
+	],
+	"vatBreakdowns": 
+	[
+	{
+	  "id": -1,
+	  "vatRate": 10.00000000,
+	  "vatTotalPrice": 11.00000000,
+	  "totalPrice": 20.00000000,
+	  "totalPriceInclVat": 30.00000000
+	}
+	],
+    "userCustomFields":
+    [
+        {
+            "customFieldGuid": "c4a0e4e8-e3fc-4a04-97ce-980a82474110",
+            "userCustomFieldType": 0,
+            "labelTranslations": {"sk-SK" : "label 11"},
+            "valueTranslations": {"sk-SK" : "value 11"},
+            "documentType": 4
+        }
+    ],
+    "hideStamp": false,
+    "note" : "",
+    "prices": {
+        "exchangeRate": 1,
+        "currency": "EUR",
+        "legislative": {
+            "totalPriceInclVat": 20
+        }
+    }
+}
+
+###

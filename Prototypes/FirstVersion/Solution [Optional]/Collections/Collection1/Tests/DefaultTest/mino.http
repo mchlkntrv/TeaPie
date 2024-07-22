@@ -1,0 +1,52 @@
+### Zalozenie faktury
+## PreScript: scripts/script1.csx-MinoMethod1
+## PostScript: scripts/script1.csx-MinoMethod1
+POST {{ADRESA}}
+Content-Type: application/json
+Authorization: Bearer 
+Cache-Control: no-cache
+
+{
+    "isDocumentNumberChangedByUser": true,
+	"documentNumber" : "2019001",
+	"numberingSequence" : "DL"
+}
+
+
+### Zalozenie pridanie polozky
+## PreScript: scripts/script1.csx-MinoMethod1
+## PostScript: scripts/script1.csx-MinoMethod1
+POST {{ADRESA}}
+Content-Type: application/json
+Authorization: Bearer 
+Cache-Control: no-cache
+
+{
+    "isDocumentNumberChangedByUser": true,
+	"documentNumber" : "2019001",
+	"numberingSequence" : "DL"
+}
+
+### Pridanie dalsej polozky
+POST {{ADRESA}}
+Content-Type: application/json
+Authorization: Bearer 
+Cache-Control: no-cache
+
+{
+    "isDocumentNumberChangedByUser": true,
+	"documentNumber" : "2019001",
+	"numberingSequence" : "DL"
+}
+
+### Vytlacenie
+POST {{ADRESA}}
+Content-Type: application/json
+Authorization: Bearer 
+Cache-Control: no-cache
+
+{
+    "isDocumentNumberChangedByUser": true,
+	"documentNumber" : "2019001",
+	"numberingSequence" : "DL"
+}
