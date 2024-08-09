@@ -129,4 +129,11 @@ tp.SetRunner(runner => {
     );
 })
 ```
+
+If end-user want to disable one specific request, he can do it easily by adding directive:
+```python
+### Request Name
+## SKIP
+GET {{URL}}
+```
  
