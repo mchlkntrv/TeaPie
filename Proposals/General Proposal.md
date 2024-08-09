@@ -1,8 +1,5 @@
-## Possible names
------------------
--	**Capy** – taken by some python lib
--	**Tapi (Test API)** – taken by python lib for API testing
--	**TeaPie (TEst API Extension)** – the most similar is teapy (python lib)
+## TeaPie (TEst API Extension)
+Is framework dedicated to ease work with API testing.
 
 ## Acceptance criteria 
 -----------------
@@ -31,6 +28,18 @@
 - Possibility to alter **order of the tests according to response** result/**branching**
 - **Re-usable scripts**
 
+## Definitions
+-----------------
+**Script** - indepedently runnable piece of code. In our context, these are `.csx` files
+
+**Request** - HTTP request, which is stored in _.http file_.
+
+**Test Case** - logically encapsulates _pre-request script(s) HTTP request(s) within .http file, post-response script(s), testing scenarios, documentation and configuration._ None of these parts is mandatory except HTTP request. Test Case can have all its dependencies in one folder (default setting), or it can be distributed. By convention, one folder contains one Test Case, but it is possible for folder to contain more test cases altogether.
+
+**Collection** - set of test cases, which are somehow (contextually) connected.
+
+**End-user** - final user of the framework. Usually a programmer or QA, who writes tests for API.
+
 ## To consider
 -----------------
 - Check possibility of adding `.md` documentation to tests (e.g. by using comments)
@@ -40,21 +49,29 @@
 - Consider inputs of QA from different company (Descartes)
 - Random data seeding (AutoBogus)
 
-## Possible problems
+## Important Notes
 -----------------
-- Saving response to file demands usage of third-party CLI command (newman, cURL, HTTPie) 
-- Although, you can still use request variables (side by side with environment, file and prompt variables)
-- It is impossible to comment the contents of the .json file in request body, which make us unable to use own variables/comments.
+- Usage of `"."` in .http file variables is **forbidden**, so we have to **ban usage of** `"."` **for variables names.**
+- For our special directives and notation within `.http file`, we will use comment starting with `##` 
+    - Therefore, making `.md` documentation in `.http` file is possible
+- Variables will be in cascade, these are the levels:
+    1. `Global Level` - global variables accessible from everywhere during whole run
+    2. `Environmental Level` - switchable variables accessible from everywhere during whole run
+    3. `Collection Level` - present only when running collection (not for single test case runs)
+    4. `Scope Level` - level dedicated for user-defined variables
+    5. `Test Case Level` - temporary variables which are existing only during single test case execution (if re-trying, they are present whole time)
+- Usage of `.csx` files as scripts will be possible
+    - Share of current context can be achieved by sending it to `Globals` for the script
+    - Cross-scripts referencing is possible, but end-user has to specify the path, although we can provide **relative paths**
+    - Usage of not-yet-installed **NuGet packages** has to be work-arounded, but possible. The prototype can be found in `./Prototypes/Code Prototypes/ScriptRunnerWithNugetPackagesSupport.cs` file
+- For collections it won't be possible to be within another collection. Although, folder structure is up to end-user, who can create "imaginary inner collection(s)" simply by dividing them to different folders
+- In order to make work easier for end-user, the alphabetical order of pre-request script, request and post-response has to be logical, here is naming convention:
+    - `test-name-init.csx`
+    - `test-name-req.http`
+    - `test-name-test.csx`
+- It is **impossible to comment the contents of request's body** in form of `.json` in request body, which make user unable to run single `.http` file, becasue of parsing problems. Although we can make it possible to run single Test Case which contains these types of variables
+- **Configuration** can be specified in `.json` file, programmatically in scripts and also in `.http` (by using directives). Configuration is merged in the same order as in the previous sentence, so configuration will be **over-written** if needed.
 
-## Definitions
------------------
-**Script** - indepedently runnable piece of code.
-
-**Request** - HTTP request, which is stored in _.http file_.
-
-**Test** - logically encapsulates _HTTP request, pre-request script(s), post-response script(s), testing scenarios, documentation and configuration._ None of these parts is mandatory except HTTP request. Test can have all its dependencies in one folder (default setting), or it can be distributed. By convention, one folder contains one test, but it is possible for folder to contain more tests altogether.
-
-**Collection** - set of tests, which can be somehow (contextually) connected. It can contain other collections - hierarchical approach.
 
 ## Naming conventions
 -----------------
@@ -63,25 +80,25 @@
 ## File structure 
 -----------------
 
-### Single test
+### Test Case
 Each test can be in own folder, or it can be altogether with another tests.
 
 **Structure:**
 
-- `TestName.json [OPTIONAL]`
+- `test-name-config.json [OPTIONAL]`
 
-- `TestName.md [OPTIONAL]` 
+- `test-name-doc.md [OPTIONAL]` 
 
-- `TestName-prereq.csx [OPTIONAL]`
+- `test-name-init.csx [OPTIONAL]`
 
-- `TestName.http` 
+- `test-name-req.http`
 
-- `TestName-postres.csx [OPTIONAL]` 
+- `test-name-test.csx [OPTIONAL]` 
 
  
 **Files specification:**
 
-`TestName.json [OPTIONAL]`
+`test-name-config.json [OPTIONAL]`
 - describes configuration of test (re-trying options, await)
 - overrides its collection's configuration
 - contains variables specific for the test
@@ -89,17 +106,17 @@ Each test can be in own folder, or it can be altogether with another tests.
 - overrides values of same-name variables (located on global, environment and collection levels)
 - template: [Test Configuration Template](#test-configuration-file)
 
-`TestName.md [OPTIONAL]`
+`test-name-doc.md [OPTIONAL]`
 - optional human-readable description of the test 
 
-`TestName-prereq.csx [OPTIONAL]` 
+`test-name-init.csx [OPTIONAL]` 
 - pre-request script that can alter behavior before sending a request 
 
-`TestName.http`
+`test-name-req.http`
 - request definition in .http format
 - from the beginning, it will contain only one request, later multiple requests will be supported
 
-`TestName-postres.csx [OPTIONAL]`
+`test-name-test.csx [OPTIONAL]`
 - script that defines post-response behavior, mainly define tests 
 
 -----------------
@@ -111,15 +128,15 @@ Contains at least one test and can contain other collections
 
 - `Tests`
 
-- `collection-configuration.json`
+- `collection-config.json`
 
-- `collection-variables.json [OPTIONAL]`
+- `collection-name-doc.md [OPTIONAL]`
 
-- `CollectionName.md [OPTIONAL]`
+- `collection-vars.json [OPTIONAL]`
 
-- `CollectionName-prereq.csx [OPTIONAL]`
+- `collection-name-init.csx [OPTIONAL]`
 
-- `CollectionName-postres.csx [OPTIONAL]` 
+- `collection-name-test.csx [OPTIONAL]` 
 
  
 **Files specification:**
@@ -129,23 +146,23 @@ Contains at least one test and can contain other collections
 `Tests`
 - folder, that contains tests, respectively other inner-collections 
 
-`collection-configuration.json`
+`collection-config.json`
 - defines configuration of the collection – tests to ignore, their order (if different from alphabetical order), re-trying options, etc.
 - template: [Collection Configuration Template](#collection-configuration-file)
 
-`collection-variables.json [OPTIONAL]`
+`collection-vars.json [OPTIONAL]`
 - contains variables specific for the collection
 - adds new variables besides environment variables
 - overrides values of same-name variables (located on global and environment level)
 - template: [Collection Variables Template](#general-variables-file)
 
-`collection-description.md [OPTIONAL]`
+`collection-doc.md [OPTIONAL]`
 - human-readable description of collection
 
-`CollectionName-prereq.csx [OPTIONAL]` 
+`collection-name-init.csx [OPTIONAL]` 
 - pre-request script that can alter behavior before collection run
 
-`CollectionName-postres.csx [OPTIONAL]`
+`collection-name-test.csx [OPTIONAL]`
 - script which is called after finish of the collection
 
 -----------------
@@ -174,11 +191,11 @@ The highest level folder, which encapsulates all desired collections altogether 
 `Shared`
 - folder, that contains functionality that can be re-used all over solution (scripts)
 
-`global-variables.json`
+`global-vars.json`
 - contains variables which will be available across all environments
 - template: [Global Variables Template](#general-variables-file)
 
-`solution-configuration.json`
+`solution-config.json`
 - defines configuration of the solution – collections/tests to ignore, their order (if different from alphabetical order), re-trying options, etc. 
 
 ## Templates
@@ -187,14 +204,15 @@ The highest level folder, which encapsulates all desired collections altogether 
 [Go Back](#single-test)
 ```json
 {
-    "retrying": {
-        "retrying": boolean,
-        "retryingCount": number
+    "retryPolicy": {
+        "maxRertryAttempts": 3,
+        "backoffType": "Exponential",
+        "delay": "00:00:03"
     },
-    "await": {
-        "awaitResponse": boolean,
-        "delayTestFor": number, // in milliseconds
-        "maxWaitingPeriod": number // in milliseconds
+    "delayRequestFor": number, // in milliseconds
+    "timeoutPolicy": {
+        "requestTimeout": number, // in milliseconds
+        "disableTimeout": boolean
     },
     "variables": [
         {
@@ -249,16 +267,31 @@ The highest level folder, which encapsulates all desired collections altogether 
         "ignoreCollections": [], // names of collections to ignore
         "ignoreTests": [] // names of tests to ignore
     },
-    "testsOrder": [], // names of tests and collections in desired order, if empty, alphabetical order is applied
-    "retrying": {
-        "retrying": boolean,
-        "retryingCount": number
+    "testsOrder": [], // names of tests and collections in desired order, if empty or not provided, alphabetical order is applied
+    {
+    "retryPolicy": {
+        "maxRertryAttempts": 3,
+        "backoffType": "Exponential",
+        "delay": "00:00:03"
     },
-    "await": {
-        "awaitResponse": boolean,
-        "delayTestFor": number, // in milliseconds
-        "maxWaitingPeriod": number // in milliseconds
-    }
+    "timeoutPolicy": {
+        "requestTimeout": number, // in milliseconds
+        "disableTimeout": boolean
+    },
+    "variables": [
+        {
+            "name": string,
+            "value": any,
+        },
+        {
+            "name": string,
+            "value": any,
+        },
+        {
+            "name": string,
+            "value": any,
+        }
+    ]
 }
 ```
 
