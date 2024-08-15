@@ -52,7 +52,7 @@ Which will run whole collection. As input it will take structure of the collecti
 
 Normally, the order of test cases is alphabetical and is derived from collection structure. Although, end-user is able to re-define the order in cofiguration file. If this file is found in the beginning of the run, new order of the test cases is computed. For calculation of the order there will be probably some internal method.
 ```csharp
-internal static List<TestCase> ComputeTestCasesOrder(CollectionStructure structure);
+internal static IEnumerable<TestCase> ComputeTestCasesOrder(CollectionStructure structure);
 ```
 
 Therefore, runner will work with two connected structures - **collection structure** and **order of test cases**. Structure of the collection will indicate hierarchical folder structure and references, while order will say in which order these pieces should be run.
@@ -107,7 +107,7 @@ public VariablesCollection TestCaseVariables { get; }
 
 // Variables methods
 public bool ContainsVariable(string name); // Check if variable exist
-public T GetVariable<T>(string name); // Gets a variable
+public T GetVariable<T>(string name, T defaultValue = default); // Gets a variable, if not found, return default value
 public void SetVariable<T>(string name, T value); // Sets a variable
 public void RemoveVariable(string name); // Removes all variables by their prefix
 public void RemoveVariables(string prefix); // Removes all variables by their prefix
