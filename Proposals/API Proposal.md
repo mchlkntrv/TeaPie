@@ -118,11 +118,11 @@ By approaching variables generally, method `GetVariable<T>()` will search for va
 --------------------
 By default, runner takes all test cases and run them in alphabetical order by their names. Althought, you can manipulate with the order. You can do it  even during run-time. For these purposes, you can use these methods:
 ```csharp
-public void NextTestCase(string testName); // Test case that will run next
-public void NextFolder(string folderName); // Folder that will run next
-public void SkipTestCase(string testName); // Test case to be ignored/skipped
-public void SkipTestCases(params string[] testNames); // Test cases to be ignored/skipped
-public void SkipFolder(string folderName); // Folder to be skipped at all
+public void NextTestCase(string pathToTestCase); // Test case that will run next
+public void NextFolder(string pathToFolder); // Folder that will run next
+public void SkipTestCase(string pathToTestCase); // Test case to be ignored/skipped
+public void SkipTestCases(params string[] pathsToTestCases); // Test cases to be ignored/skipped
+public void SkipFolder(string pathToFolder); // Folder to be skipped at all
 ```
 
 These methods can be especially useful, when `Response` contains values that alter next behavior, or when tests failed and next request(s) don't make sense anymore.

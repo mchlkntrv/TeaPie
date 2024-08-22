@@ -128,7 +128,7 @@ Contains at least one test and can contain other collections
 
 - `Tests`
 
-- `collection-config.json`
+- `collection-name-config.json`
 
 - `collection-name-doc.md [OPTIONAL]`
 
@@ -146,7 +146,7 @@ Contains at least one test and can contain other collections
 `Tests`
 - folder, that contains tests, respectively other inner-collections 
 
-`collection-config.json`
+`collection-name-config.json`
 - defines configuration of the collection – tests to ignore, their order (if different from alphabetical order), re-trying options, etc.
 - template: [Collection Configuration Template](#collection-configuration-file)
 
