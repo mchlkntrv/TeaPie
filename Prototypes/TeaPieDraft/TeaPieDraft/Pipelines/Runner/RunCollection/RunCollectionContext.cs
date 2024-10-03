@@ -8,5 +8,5 @@ internal class RunCollectionContext : ICollectionPipelineContext<TestCaseExecuti
     public TestCaseExecution? Current { get; set; }
     public IEnumerable<TestCaseExecution> Values { get; set; } = [];
 
-    public RunTestCaseContext? GetItemContext() => Current is null ? null : new(Current);
+    public RunTestCaseContext? GetItemContext() => Current is null ? new() : new(Current);
 }

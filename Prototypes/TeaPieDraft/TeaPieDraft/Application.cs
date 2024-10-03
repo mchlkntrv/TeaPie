@@ -3,12 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using TeaPieDraft.Attributes;
 using TeaPieDraft.Exceptions;
 using TeaPieDraft.HttpClient;
-using TeaPieDraft.Parsing;
-using TeaPieDraft.Pipelines;
-using TeaPieDraft.Pipelines.Runner.RunCollection;
-using TeaPieDraft.Pipelines.Runner.RunScriptsCollection;
-using TeaPieDraft.Pipelines.StructureExploration.Collection;
-using TeaPieDraft.Runner;
+using TeaPieDraft.Pipelines.Application;
 using TeaPieDraft.ScriptHandling;
 using TeaPieDraft.Variables;
 
@@ -20,8 +15,6 @@ namespace TeaPieDraft
 
         private readonly ILogger _logger;
         private readonly StructureExplorer.StructureExplorer _structureExplorer;
-        private readonly CollectionRunner _collectionRunner;
-        private readonly TestCaseRunner _testCaseRunner;
         private readonly ScriptCompiler _scriptCompiler;
         private readonly ScriptRunner _scriptRunner;
         private readonly ScriptPreProcessor _scriptPreProcessor;
@@ -30,8 +23,6 @@ namespace TeaPieDraft
         {
             _logger = logger;
             _scriptCompiler = new ScriptCompiler();
-            _collectionRunner = new CollectionRunner(_scriptCompiler, logger);
-            _testCaseRunner = new TestCaseRunner(_scriptCompiler, logger);
             _structureExplorer = new StructureExplorer.StructureExplorer();
             _scriptRunner = new ScriptRunner();
             _scriptPreProcessor = new ScriptPreProcessor();
@@ -90,49 +81,15 @@ namespace TeaPieDraft
 
         // Run
         [MemberNotNull(nameof(UserContext))]
-        internal async Task Run(string path, bool isCollection)
+        internal async Task Run(string path)
         {
             var userContext = new TeaPie(this);
             ScriptCompiler.UserContext = userContext;
             UserContext = userContext;
-            if (isCollection)
-            {
-                var expContext = new CollectionExplorationContext(path);
-                expContext = await CollectionStructureExplorationPipeline.CreateDefault(expContext).RunAsync();
-                _logger.LogInformation("Exploration of collection structure was completed.");
 
-                var runContext = new RunCollectionContext();
-                runContext.Values = expContext.TestCases.Values.Select(x => new TestCaseExecution(x));
-
-                foreach (var testCase in runContext.Values)
-                {
-                    runContext.Current = testCase;
-
-                    foreach (var preRequest in testCase.PreRequests)
-                    {
-                        runContext.Current.Current = preRequest;
-                        var preReqScriptsContext = new RunScriptsCollectionContext()
-                        {
-                            Current = runContext.Current.Current,
-                            Values = testCase.PreRequests
-                        };
-
-                        var scriptsPipeline = RunScriptCollectionPipeline.CreateDefault(preReqScriptsContext);
-                        await scriptsPipeline.RunAsync();
-                    }
-
-                    var fileContent = await File.ReadAllTextAsync(testCase.RequestFile.Structure!.Path!);
-                    var result = HttpFileParser.ParseHttpFile(fileContent);
-                    using var client = new System.Net.Http.HttpClient();
-
-                    client.BaseAddress = result.Item1;
-                    Logger.LogInformation("Sending HTTP Request '{req}'", testCase.RequestFile.Structure!.RelativePath);
-                    var response = await client.SendAsync(result.Item2);
-                    Logger.LogInformation("Response for '{req}' is {res}",
-                        testCase.RequestFile.Structure!.RelativePath,
-                        response.StatusCode.ToString());
-                }
-            }
+            var appContext = new ApplicationContext(path);
+            var pipeline = ApplicationPipeline.CreateDefault(new(path));
+            var context = await pipeline.RunAsync();
         }
 
         // Execution context

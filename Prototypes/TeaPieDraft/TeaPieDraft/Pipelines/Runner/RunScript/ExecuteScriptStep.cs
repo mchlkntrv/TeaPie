@@ -20,7 +20,7 @@ internal class ExecuteScriptStep : BaseStep<RunScriptContext>
 
         var compilation = context?.Compilation;
         var script = context?.Script;
-        var logger = Application.UserContext?.Logger;
+        var logger = TeaPieDraft.Application.UserContext?.Logger;
 
         if (compilation is null) throw new ArgumentNullException("Compilation of the current script is null.");
         if (script is null) throw new ArgumentNullException("Script object is null.");
@@ -32,7 +32,7 @@ internal class ExecuteScriptStep : BaseStep<RunScriptContext>
                 context?.Structure?.RelativePath);
 
             var state = await script.RunAsync(
-                globals: new Globals() { tp = Application.UserContext },
+                globals: new Globals() { tp = TeaPieDraft.Application.UserContext },
                 cancellationToken: cancellationToken
             );
         }

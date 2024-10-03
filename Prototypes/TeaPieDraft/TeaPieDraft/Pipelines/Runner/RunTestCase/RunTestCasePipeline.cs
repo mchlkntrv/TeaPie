@@ -1,18 +1,24 @@
 ﻿using TeaPieDraft.Pipelines.Base;
+using TeaPieDraft.Pipelines.Runner.RunCollection;
+using TeaPieDraft.Pipelines.Runner.RunRequest;
+using TeaPieDraft.Pipelines.Runner.RunScriptsCollection;
 
 namespace TeaPieDraft.Pipelines.Runner.RunTestCase;
-internal class RunTestCasePipeline : PipelineBase<RunTestCaseContext>
+internal class RunTestCasePipeline
+    : PipelineBase<RunTestCaseContext>,
+    IPipelineStep<RunCollectionContext>,
+    IPipelineStep<RunTestCaseContext>
 {
-    private readonly List<IPipelineStep<RunTestCaseContext>> _preRequestsSteps = [];
-    private readonly List<IPipelineStep<RunTestCaseContext>> _postResponsesSteps = [];
-
-    public RunTestCasePipeline(RunTestCaseContext? initialContext) : base(initialContext)
-    {
-    }
+    public RunTestCasePipeline(RunTestCaseContext? initialContext) : base(initialContext) { }
 
     internal static RunTestCasePipeline CreateDefault(RunTestCaseContext initialContext)
     {
         var instance = new RunTestCasePipeline(initialContext);
+        instance.AddStep(RunScriptCollectionPipeline.CreateDefault(new(initialContext.PreRequests)));
+
+        instance.AddStep(new RunRequestFileStep());
+
+        instance.AddStep(RunScriptCollectionPipeline.CreateDefault(new(initialContext.PostResponses)));
 
         return instance;
     }
@@ -30,14 +36,27 @@ internal class RunTestCasePipeline : PipelineBase<RunTestCaseContext>
         return instance;
     }
 
-    public override async Task<RunTestCaseContext> RunAsync(
-        RunTestCaseContext? initialContext = default,
+    public async Task<RunCollectionContext> ExecuteAsync(
+        RunCollectionContext context,
         CancellationToken cancellationToken = default)
     {
-        if (initialContext is not null) { _initialContext = initialContext; }
+        if (context is null) throw new ArgumentNullException("Run Collection Context");
 
-        var currentContext = _initialContext;
-        await Task.CompletedTask;
-        return currentContext!;
+        if (context.Current is not null)
+        {
+            await RunAsync(new(context.Current), cancellationToken);
+        }
+        else
+        {
+            Console.WriteLine();
+        }
+
+        return context;
+    }
+
+    public async Task<RunTestCaseContext> ExecuteAsync(RunTestCaseContext context, CancellationToken cancellationToken = default)
+    {
+        if (context is null) throw new ArgumentNullException("Run Collection Context");
+        return await RunAsync(context, cancellationToken);
     }
 }

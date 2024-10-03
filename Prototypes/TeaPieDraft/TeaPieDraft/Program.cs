@@ -11,4 +11,4 @@ var logger = new LoggerConfiguration()
     .CreateLogger();
 
 var app = new Application(new SerilogLoggerAdapter<Program>(logger));
-await app.Run(collectionPath!, true);
+await app.Run(collectionPath!);

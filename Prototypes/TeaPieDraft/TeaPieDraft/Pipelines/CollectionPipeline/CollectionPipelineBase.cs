@@ -34,9 +34,9 @@ internal abstract class CollectionPipelineBase<CollectionContextType, StepContex
         ResolveInput(initialContext);
 
         StepContextType? contextForStep;
-        foreach (var script in _initialContext!.Values)
+        foreach (var current in _initialContext!.Values)
         {
-            _initialContext.Current = script;
+            _initialContext.Current = current;
 
             foreach (var step in _pipelineSteps)
             {

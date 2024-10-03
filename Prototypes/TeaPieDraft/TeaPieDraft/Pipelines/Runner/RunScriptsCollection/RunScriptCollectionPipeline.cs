@@ -1,19 +1,17 @@
 ﻿using TeaPieDraft.Pipelines.Base;
 using TeaPieDraft.Pipelines.CollectionPipeline;
 using TeaPieDraft.Pipelines.Runner.RunScript;
+using TeaPieDraft.Pipelines.Runner.RunTestCase;
 using TeaPieDraft.ScriptHandling;
 
 namespace TeaPieDraft.Pipelines.Runner.RunScriptsCollection;
 internal class RunScriptCollectionPipeline
-    : CollectionPipelineBase<RunScriptsCollectionContext, RunScriptContext, ScriptExecution>
+    : CollectionPipelineBase<RunScriptsCollectionContext, RunScriptContext, ScriptExecution>,
+    IPipelineStep<RunTestCaseContext>
 {
-    public RunScriptCollectionPipeline() : base()
-    {
-    }
+    public RunScriptCollectionPipeline() : base() { }
 
-    protected RunScriptCollectionPipeline(RunScriptsCollectionContext initialContext) : base(initialContext)
-    {
-    }
+    protected RunScriptCollectionPipeline(RunScriptsCollectionContext initialContext) : base(initialContext) { }
 
     internal static RunScriptCollectionPipeline CreateDefault(RunScriptsCollectionContext initialContext)
     {
@@ -21,23 +19,28 @@ internal class RunScriptCollectionPipeline
 
         if (initialContext is null) throw new ArgumentNullException("Initial context");
         var itemContext = initialContext.GetItemContext();
-        if (itemContext is null) throw new ArgumentNullException("Context for step is null.");
+        if (itemContext is null) throw new ArgumentNullException("Context for step.");
 
         instance.AddStep(RunScriptPipeline.CreateDefault(itemContext));
 
         return instance;
     }
 
-    internal static RunScriptCollectionPipeline Create(
-        IEnumerable<IPipelineStep<RunScriptContext>> steps,
-        RunScriptsCollectionContext initialContext)
+    public async Task<RunTestCaseContext> ExecuteAsync(
+        RunTestCaseContext context,
+        CancellationToken cancellationToken = default)
     {
-        var instance = new RunScriptCollectionPipeline(initialContext);
-        foreach (var step in steps)
+        if (context == null) throw new ArgumentNullException("Run Collection Context");
+
+        if (!context.RequestExecuted)
         {
-            instance.AddStep(step);
+            await RunAsync(new(context.PreRequests), cancellationToken);
+        }
+        else
+        {
+            await RunAsync(new(context.PostResponses), cancellationToken);
         }
 
-        return instance;
+        return context;
     }
 }

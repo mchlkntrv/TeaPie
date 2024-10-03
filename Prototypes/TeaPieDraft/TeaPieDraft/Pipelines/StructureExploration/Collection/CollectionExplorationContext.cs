@@ -2,6 +2,7 @@
 using TeaPieDraft.StructureExplorer;
 
 namespace TeaPieDraft.Pipelines;
+
 internal class CollectionExplorationContext(string initialPath) : IPipelineContext
 {
     public string Path { get; set; } = initialPath;

@@ -11,7 +11,9 @@ internal class ComputeTestCaseOrderStep : IPipelineStep<CollectionExplorationCon
         return context;
     }
 
-    public async Task<CollectionExplorationContext> ExecuteAsync(CollectionExplorationContext context, CancellationToken cancellationToken = default)
+    public async Task<CollectionExplorationContext> ExecuteAsync(
+        CollectionExplorationContext context,
+        CancellationToken cancellationToken = default)
     {
         await Task.CompletedTask;
         return Execute(context);

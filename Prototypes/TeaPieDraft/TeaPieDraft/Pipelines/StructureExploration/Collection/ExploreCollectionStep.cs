@@ -9,7 +9,7 @@ internal class ExploreCollectionStep : IPipelineStep<CollectionExplorationContex
     {
         if (context == null) throw new ArgumentNullException("context");
 
-        var logger = Application.UserContext!.Logger;
+        var logger = TeaPieDraft.Application.UserContext!.Logger;
         logger.LogInformation("Structure of the collection is going to be explored.");
         var explorer = new StructureExplorer.StructureExplorer();
         var structure = StructureExplorer.StructureExplorer.ExploreCollectionAsync(context.Path);

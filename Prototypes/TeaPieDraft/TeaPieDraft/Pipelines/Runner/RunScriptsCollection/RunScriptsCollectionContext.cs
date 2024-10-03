@@ -5,8 +5,13 @@ using TeaPieDraft.ScriptHandling;
 namespace TeaPieDraft.Pipelines.Runner.RunScriptsCollection;
 internal class RunScriptsCollectionContext : ICollectionPipelineContext<ScriptExecution, RunScriptContext>
 {
+    public RunScriptsCollectionContext(IEnumerable<ScriptExecution> values)
+    {
+        Values = values;
+    }
+
     public ScriptExecution? Current { get; set; }
     public IEnumerable<ScriptExecution> Values { get; set; } = [];
 
-    public RunScriptContext? GetItemContext() => Current is null ? null : new(Current);
+    public RunScriptContext? GetItemContext() => Current is null ? new() : new(Current);
 }

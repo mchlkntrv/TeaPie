@@ -1,8 +1,11 @@
-﻿using TeaPieDraft.Pipelines.Base;
+﻿using TeaPieDraft.Pipelines.Application;
+using TeaPieDraft.Pipelines.Base;
 
 namespace TeaPieDraft.Pipelines.StructureExploration.Collection;
 
-internal class CollectionStructureExplorationPipeline : PipelineBase<CollectionExplorationContext>
+internal class CollectionStructureExplorationPipeline
+    : PipelineBase<CollectionExplorationContext>,
+    IPipelineStep<ApplicationContext>
 {
     public CollectionStructureExplorationPipeline() : base()
     {
@@ -17,9 +20,11 @@ internal class CollectionStructureExplorationPipeline : PipelineBase<CollectionE
         instance.AddStep(new ExploreCollectionStep());
         instance.AddStep(new ComputeTestCaseOrderStep());
         instance.AddStep(new PrintTestCaseOrderStep());
-
         return instance;
     }
+
+    internal static CollectionStructureExplorationPipeline CreateDefault(ApplicationContext initialContext)
+        => CreateDefault(initialContext.ExplorationContext);
 
     internal static CollectionStructureExplorationPipeline Create(
         IEnumerable<IPipelineStep<CollectionExplorationContext>> steps,
@@ -32,5 +37,14 @@ internal class CollectionStructureExplorationPipeline : PipelineBase<CollectionE
         }
 
         return instance;
+    }
+
+    public async Task<ApplicationContext> ExecuteAsync(
+        ApplicationContext context,
+        CancellationToken cancellationToken = default)
+    {
+        context.ExplorationContext ??= new CollectionExplorationContext(context.Path);
+        context.ExplorationContext = await RunAsync(context.ExplorationContext, cancellationToken);
+        return context;
     }
 }

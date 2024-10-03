@@ -4,6 +4,7 @@ using TeaPieDraft.ScriptHandling;
 namespace TeaPieDraft.Pipelines.Runner.RunScript;
 internal class RunScriptContext : ScriptExecution, IPipelineContext
 {
+    internal RunScriptContext() { }
     internal RunScriptContext(ScriptExecution scriptExecution)
     {
         Structure = scriptExecution.Structure;
