@@ -4,20 +4,10 @@ using TeaPieDraft.ScriptHandling;
 using Constants = TeaPieDraft.Parsing.ParsingConstants;
 
 namespace TeaPieDraft.Pipelines.Runner.RunScript;
-internal class ExecuteScriptStep : BaseStep<RunScriptContext>
+internal class ExecuteScriptStep : IPipelineStep<RunScriptContext>
 {
-    private readonly ScriptRunner _runner;
-    internal ExecuteScriptStep(ScriptRunner scriptRunner)
+    public async Task<RunScriptContext> ExecuteAsync(RunScriptContext context, CancellationToken cancellationToken = default)
     {
-        _runner = scriptRunner;
-    }
-
-    internal ExecuteScriptStep() { _runner = new(); }
-
-    public override async Task<RunScriptContext> ExecuteAsync(RunScriptContext context, CancellationToken cancellationToken = default)
-    {
-        await base.ExecuteAsync(context, cancellationToken);
-
         var compilation = context?.Compilation;
         var script = context?.Script;
         var logger = TeaPieDraft.Application.UserContext?.Logger;

@@ -2,17 +2,15 @@
 using TeaPieDraft.ScriptHandling;
 
 namespace TeaPieDraft.Pipelines.Runner.RunScript;
-internal class ReadScriptContentStep : BaseStep<RunScriptContext>
+internal class ReadScriptContentStep : IPipelineStep<RunScriptContext>
 {
-    public override async Task<RunScriptContext> ExecuteAsync(RunScriptContext context, CancellationToken cancellationToken = default)
+    public async Task<RunScriptContext> ExecuteAsync(RunScriptContext context, CancellationToken cancellationToken = default)
     {
-        await base.ExecuteAsync(context, cancellationToken);
-
         var structure = context?.Structure;
         var path = structure?.Path;
 
-        if (structure is null) throw new ArgumentNullException("Script's structure is null.");
-        if (path is null) throw new ArgumentNullException("Path to current script is null.");
+        if (structure is null) throw new ArgumentNullException("Script's structure");
+        if (path is null) throw new ArgumentNullException("Path to current script");
 
         context!.RawContent = await FileReader.GetFileContentAsync(path);
 

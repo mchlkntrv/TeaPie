@@ -16,7 +16,6 @@ namespace TeaPieDraft
         private readonly ILogger _logger;
         private readonly StructureExplorer.StructureExplorer _structureExplorer;
         private readonly ScriptCompiler _scriptCompiler;
-        private readonly ScriptRunner _scriptRunner;
         private readonly ScriptPreProcessor _scriptPreProcessor;
 
         internal Application(ILogger logger)
@@ -24,7 +23,6 @@ namespace TeaPieDraft
             _logger = logger;
             _scriptCompiler = new ScriptCompiler();
             _structureExplorer = new StructureExplorer.StructureExplorer();
-            _scriptRunner = new ScriptRunner();
             _scriptPreProcessor = new ScriptPreProcessor();
         }
 

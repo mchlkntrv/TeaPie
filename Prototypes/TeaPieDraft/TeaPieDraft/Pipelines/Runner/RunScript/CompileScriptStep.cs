@@ -2,7 +2,7 @@
 using TeaPieDraft.ScriptHandling;
 
 namespace TeaPieDraft.Pipelines.Runner.RunScript;
-internal class CompileScriptStep : BaseStep<RunScriptContext>
+internal class CompileScriptStep : IPipelineStep<RunScriptContext>
 {
     private readonly ScriptCompiler _compiler;
     internal CompileScriptStep()
@@ -15,15 +15,15 @@ internal class CompileScriptStep : BaseStep<RunScriptContext>
         _compiler = compiler;
     }
 
-    public override async Task<RunScriptContext> ExecuteAsync(RunScriptContext context, CancellationToken cancellationToken = default)
+    public async Task<RunScriptContext> ExecuteAsync(RunScriptContext context, CancellationToken cancellationToken = default)
     {
-        await base.ExecuteAsync(context, cancellationToken);
-
         if (context?.ProcessedContent is null) throw new ArgumentNullException("Content of the script is null.");
 
         var compiled = _compiler.CompileScript(context.ProcessedContent);
         context.Script = compiled.Item1;
         context.Compilation = compiled.Item2;
+
+        await Task.CompletedTask;
 
         return context;
     }

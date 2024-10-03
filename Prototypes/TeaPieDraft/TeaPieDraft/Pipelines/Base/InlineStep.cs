@@ -1,6 +1,6 @@
 ﻿namespace TeaPieDraft.Pipelines.Base;
 
-internal class InlineStep<ContextType> : BaseStep<ContextType>
+internal class InlineStep<ContextType> : IPipelineStep<ContextType>
     where ContextType : IPipelineContext
 {
     private readonly Func<ContextType, Task<ContextType>> _lambdaFunction;
@@ -10,9 +10,6 @@ internal class InlineStep<ContextType> : BaseStep<ContextType>
         _lambdaFunction = lambdaFunction;
     }
 
-    public override async Task<ContextType> ExecuteAsync(ContextType context, CancellationToken cancellationToken = default)
-    {
-        await base.ExecuteAsync(context, cancellationToken);
-        return await _lambdaFunction.Invoke(context);
-    }
+    public async Task<ContextType> ExecuteAsync(ContextType context, CancellationToken cancellationToken = default)
+        => await _lambdaFunction.Invoke(context);
 }

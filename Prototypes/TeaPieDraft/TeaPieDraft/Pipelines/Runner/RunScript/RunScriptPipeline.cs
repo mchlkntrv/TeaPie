@@ -5,13 +5,7 @@ namespace TeaPieDraft.Pipelines.Runner.RunScript;
 internal class RunScriptPipeline : PipelineBase<RunScriptContext>,
     IPipelineStep<RunScriptContext>
 {
-    public RunScriptPipeline() : base()
-    {
-    }
-
-    public RunScriptPipeline(RunScriptContext? initialContext) : base(initialContext)
-    {
-    }
+    public RunScriptPipeline() : base() { }
 
     internal static RunScriptPipeline CreateDefault()
     {
@@ -20,19 +14,6 @@ internal class RunScriptPipeline : PipelineBase<RunScriptContext>,
         instance.AddStep(new PreProcessScriptStep());
         instance.AddStep(new CompileScriptStep());
         instance.AddStep(new ExecuteScriptStep());
-
-        return instance;
-    }
-
-    internal static RunScriptPipeline Create(
-        IEnumerable<IPipelineStep<RunScriptContext>> steps,
-        RunScriptContext initialContext)
-    {
-        var instance = new RunScriptPipeline(initialContext);
-        foreach (var step in steps)
-        {
-            instance.AddStep(step);
-        }
 
         return instance;
     }
