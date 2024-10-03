@@ -10,21 +10,19 @@ internal class CollectionStructureExplorationPipeline
     public CollectionStructureExplorationPipeline() : base()
     {
     }
+
     protected CollectionStructureExplorationPipeline(CollectionExplorationContext initialContext) : base(initialContext)
     {
     }
 
-    internal static CollectionStructureExplorationPipeline CreateDefault(CollectionExplorationContext initialContext)
+    internal static CollectionStructureExplorationPipeline CreateDefault()
     {
-        var instance = new CollectionStructureExplorationPipeline(initialContext);
+        var instance = new CollectionStructureExplorationPipeline();
         instance.AddStep(new ExploreCollectionStep());
         instance.AddStep(new ComputeTestCaseOrderStep());
         instance.AddStep(new PrintTestCaseOrderStep());
         return instance;
     }
-
-    internal static CollectionStructureExplorationPipeline CreateDefault(ApplicationContext initialContext)
-        => CreateDefault(initialContext.ExplorationContext);
 
     internal static CollectionStructureExplorationPipeline Create(
         IEnumerable<IPipelineStep<CollectionExplorationContext>> steps,

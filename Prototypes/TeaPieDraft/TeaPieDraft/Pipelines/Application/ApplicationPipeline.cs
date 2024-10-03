@@ -5,14 +5,14 @@ using TeaPieDraft.Pipelines.StructureExploration.Collection;
 namespace TeaPieDraft.Pipelines.Application;
 internal class ApplicationPipeline : PipelineBase<ApplicationContext>
 {
-    internal ApplicationPipeline(ApplicationContext context) : base(context) { }
+    internal ApplicationPipeline() { }
 
-    internal static ApplicationPipeline CreateDefault(ApplicationContext initialContext)
+    internal static ApplicationPipeline CreateDefault()
     {
-        var instance = new ApplicationPipeline(initialContext);
-        instance.AddStep(CollectionStructureExplorationPipeline.CreateDefault(initialContext));
+        var instance = new ApplicationPipeline();
+        instance.AddStep(CollectionStructureExplorationPipeline.CreateDefault());
         instance.AddStep(new PrepareExecutionContextStep());
-        instance.AddStep(RunCollectionPipeline.CreateDefault(initialContext));
+        instance.AddStep(RunCollectionPipeline.CreateDefault());
         return instance;
     }
 

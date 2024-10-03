@@ -9,25 +9,21 @@ internal class RunTestCasePipeline
     IPipelineStep<RunCollectionContext>,
     IPipelineStep<RunTestCaseContext>
 {
-    public RunTestCasePipeline(RunTestCaseContext? initialContext) : base(initialContext) { }
+    internal RunTestCasePipeline() { }
 
-    internal static RunTestCasePipeline CreateDefault(RunTestCaseContext initialContext)
+    internal static RunTestCasePipeline CreateDefault()
     {
-        var instance = new RunTestCasePipeline(initialContext);
-        instance.AddStep(RunScriptCollectionPipeline.CreateDefault(new(initialContext.PreRequests)));
-
+        var instance = new RunTestCasePipeline();
+        instance.AddStep(RunScriptCollectionPipeline.CreateDefault());
         instance.AddStep(new RunRequestFileStep());
-
-        instance.AddStep(RunScriptCollectionPipeline.CreateDefault(new(initialContext.PostResponses)));
+        instance.AddStep(RunScriptCollectionPipeline.CreateDefault());
 
         return instance;
     }
 
-    internal static RunTestCasePipeline Create(
-        IEnumerable<IPipelineStep<RunTestCaseContext>> steps,
-        RunTestCaseContext initialContext)
+    internal static RunTestCasePipeline Create(IEnumerable<IPipelineStep<RunTestCaseContext>> steps)
     {
-        var instance = new RunTestCasePipeline(initialContext);
+        var instance = new RunTestCasePipeline();
         foreach (var step in steps)
         {
             instance.AddStep(step);

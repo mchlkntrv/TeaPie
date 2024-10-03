@@ -10,23 +10,15 @@ internal class RunCollectionPipeline
     : CollectionPipelineBase<RunCollectionContext, RunTestCaseContext, TestCaseExecution>,
     IPipelineStep<ApplicationContext>
 {
-    internal RunCollectionPipeline(RunCollectionContext runningContext) : base(runningContext) { }
+    internal RunCollectionPipeline() { }
 
-    internal static RunCollectionPipeline CreateDefault(RunCollectionContext initialContext)
+    internal static RunCollectionPipeline CreateDefault()
     {
-        var instance = new RunCollectionPipeline(initialContext);
-
-        if (initialContext is null) throw new ArgumentNullException("Initial context");
-        var itemContext = initialContext.GetItemContext();
-        if (itemContext is null) throw new ArgumentNullException("Context for step is null.");
-
-        instance.AddStep(RunTestCasePipeline.CreateDefault(itemContext));
+        var instance = new RunCollectionPipeline();
+        instance.AddStep(RunTestCasePipeline.CreateDefault());
 
         return instance;
     }
-
-    internal static RunCollectionPipeline CreateDefault(ApplicationContext initialContext)
-        => CreateDefault(initialContext.RunningContext!);
 
     public async Task<ApplicationContext> ExecuteAsync(
         ApplicationContext context,

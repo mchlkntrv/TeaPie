@@ -13,15 +13,10 @@ internal class RunScriptCollectionPipeline
 
     protected RunScriptCollectionPipeline(RunScriptsCollectionContext initialContext) : base(initialContext) { }
 
-    internal static RunScriptCollectionPipeline CreateDefault(RunScriptsCollectionContext initialContext)
+    internal static RunScriptCollectionPipeline CreateDefault()
     {
-        var instance = new RunScriptCollectionPipeline(initialContext);
-
-        if (initialContext is null) throw new ArgumentNullException("Initial context");
-        var itemContext = initialContext.GetItemContext();
-        if (itemContext is null) throw new ArgumentNullException("Context for step.");
-
-        instance.AddStep(RunScriptPipeline.CreateDefault(itemContext));
+        var instance = new RunScriptCollectionPipeline();
+        instance.AddStep(RunScriptPipeline.CreateDefault());
 
         return instance;
     }

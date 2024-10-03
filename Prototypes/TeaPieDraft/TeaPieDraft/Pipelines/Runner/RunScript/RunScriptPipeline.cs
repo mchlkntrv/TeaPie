@@ -13,9 +13,9 @@ internal class RunScriptPipeline : PipelineBase<RunScriptContext>,
     {
     }
 
-    internal static RunScriptPipeline CreateDefault(RunScriptContext initialContext)
+    internal static RunScriptPipeline CreateDefault()
     {
-        var instance = new RunScriptPipeline(initialContext);
+        var instance = new RunScriptPipeline();
         instance.AddStep(new ReadScriptContentStep());
         instance.AddStep(new PreProcessScriptStep());
         instance.AddStep(new CompileScriptStep());

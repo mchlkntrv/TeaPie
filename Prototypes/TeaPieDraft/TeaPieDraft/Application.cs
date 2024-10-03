@@ -81,15 +81,15 @@ namespace TeaPieDraft
 
         // Run
         [MemberNotNull(nameof(UserContext))]
-        internal async Task Run(string path)
+        internal async Task RunAsync(string path)
         {
             var userContext = new TeaPie(this);
             ScriptCompiler.UserContext = userContext;
             UserContext = userContext;
 
             var appContext = new ApplicationContext(path);
-            var pipeline = ApplicationPipeline.CreateDefault(new(path));
-            var context = await pipeline.RunAsync();
+            var pipeline = ApplicationPipeline.CreateDefault();
+            await pipeline.RunAsync(appContext);
         }
 
         // Execution context
