@@ -1,0 +1,1 @@
+Original draft was erased from this repository, since it caused some problems with git handling two repositories (TeaPieDraft is also repository on GitHub). Draft repository can be found here: https://github.com/Kros-sk/TeaPie
