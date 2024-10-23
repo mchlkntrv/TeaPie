@@ -2,8 +2,10 @@
 
 namespace TeaPie.Pipelines.Application;
 
-internal class ApplicationContext(string path)
+internal class ApplicationContext(string path, string tempFolder = "")
 {
     public string Path { get; set; } = path;
+    public string TempFolderPath { get; set; } = tempFolder;
     public Dictionary<string, TestCase> TestCases { get; set; } = [];
+    public Dictionary<string, Script> UserDefinedScripts { get; set; } = [];
 }

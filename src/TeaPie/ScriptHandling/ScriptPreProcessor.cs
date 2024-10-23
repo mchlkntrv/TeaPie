@@ -1,24 +1,41 @@
-﻿using NuGet.Common;
-using NuGet.Frameworks;
-using NuGet.Packaging.Core;
-using NuGet.Protocol;
-using NuGet.Protocol.Core.Types;
-using NuGet.Versioning;
+﻿using System.Text.RegularExpressions;
+using TeaPie.Helpers;
+using TeaPie.Parsing;
 
 namespace TeaPie.ScriptHandling;
 
 internal interface IScriptPreProcessor
 {
-    public Task<string> PrepareScript(string path, string scriptContent);
+    public Task<string> ProcessScript(
+        string path,
+        string scriptContent,
+        string rootPath,
+        string tempFolderPath,
+        List<string> referencedScripts);
 }
 
-internal class ScriptPreProcessor : IScriptPreProcessor
+internal partial class ScriptPreProcessor(INugetPackageHandler nugetPackagesHandler) : IScriptPreProcessor
 {
-    public async Task<string> PrepareScript(string path, string scriptContent)
+    private List<string> _referencedScripts = [];
+    private string _rootPath = string.Empty;
+    private string _tempFolderPath = string.Empty;
+    private readonly INugetPackageHandler _nugetPackagesHandler = nugetPackagesHandler;
+
+    public async Task<string> ProcessScript(
+        string path,
+        string scriptContent,
+        string rootPath,
+        string tempFolderPath,
+        List<string> referencedScripts)
     {
-        IEnumerable<string> lines;
-        var hasLoadDirectives = scriptContent.Contains(Constants.ReferenceScriptDirective);
-        var hasNugetDirectives = scriptContent.Contains(Constants.NugetDirectivePrefix);
+        IEnumerable<string> lines, referencedScriptsDirectives;
+
+        _rootPath = rootPath;
+        _tempFolderPath = tempFolderPath;
+        _referencedScripts = referencedScripts;
+
+        var hasLoadDirectives = scriptContent.Contains(ParsingConstants.LoadScriptDirective);
+        var hasNugetDirectives = scriptContent.Contains(ParsingConstants.NugetDirective);
 
         if (hasLoadDirectives || hasNugetDirectives)
         {
@@ -27,41 +44,44 @@ internal class ScriptPreProcessor : IScriptPreProcessor
             if (hasLoadDirectives)
             {
                 lines = ResolveLoadDirectives(path, lines);
+                referencedScriptsDirectives = lines.Where(x => x.Contains(ParsingConstants.LoadScriptDirective));
+                CheckAndRegisterReferencedScripts(referencedScriptsDirectives);
             }
 
             if (hasNugetDirectives)
             {
                 await ResolveNugetDirectives(lines);
-                lines = lines.Where(x => !x.Contains(Constants.NugetDirectivePrefix));
+                lines = lines.Where(x => !x.Contains(ParsingConstants.NugetDirective));
             }
 
             scriptContent = string.Join(Environment.NewLine, lines);
         }
 
-        // TODO: Add global script reference, if specified by user
-
         return scriptContent;
     }
 
-    private static IEnumerable<string> ResolveLoadDirectives(string path, IEnumerable<string> lines)
+    private void CheckAndRegisterReferencedScripts(IEnumerable<string> referencedScriptsDirectives)
     {
-        var currentDirectory = Path.GetDirectoryName(path);
-        return lines.Select(line => ResolveLoadDirective(currentDirectory!, line!));
-    }
-
-    private static string ResolveLoadDirective(string currentDirectory, string line)
-    {
-        if (line.TrimStart().StartsWith(Constants.ReferenceScriptDirective))
+        foreach (var scriptPath in referencedScriptsDirectives)
         {
-            var segments = line.Split(new[] { Constants.ReferenceScriptDirective }, 2, StringSplitOptions.None);
-            var loadPath = segments[1].Trim();
-            loadPath = loadPath.Replace("\"", string.Empty);
-            loadPath = ResolvePath(currentDirectory!, loadPath);
+            var tempPath = GetPathFromLoadDirective(scriptPath);
+            var realPath = tempPath.TrimRootPath(_tempFolderPath, false);
+            realPath = _rootPath.MergeWith(realPath);
 
-            return $"{Constants.ReferenceScriptDirective} \"{loadPath}\"";
+            if (!File.Exists(realPath))
+            {
+                throw new FileNotFoundException($"Referenced script on path '{realPath}' was not found");
+            }
+
+            _referencedScripts.Add(realPath);
         }
-        return line;
     }
+
+    private IEnumerable<string> ResolveLoadDirectives(string path, IEnumerable<string> lines)
+        => lines.Select(line => ResolveLoadDirective(path, line));
+
+    private string ResolveLoadDirective(string path, string line)
+        => LoadReferenceRegex().IsMatch(line) ? ProcessLoadDirective(line, path) : line;
 
     private static string ResolvePath(string basePath, string relativePath)
     {
@@ -70,109 +90,58 @@ internal class ScriptPreProcessor : IScriptPreProcessor
     }
 
     private async Task ResolveNugetDirectives(IEnumerable<string> lines)
-    {
-        var packagePath = $"{Environment.CurrentDirectory}/{Constants.DefaultNugetPackageFolderName}";
-        var nugetPackages = ProcessNugetPackages(lines!);
-        foreach (var package in nugetPackages)
-        {
-            await DownloadNuget(packagePath, package.PackageName!, package.Version!);
-        }
-    }
+        => await _nugetPackagesHandler.HandleNugetPackages(ProcessNugetPackagesDirectives(lines));
 
-    private static List<NugetPackageDescription> ProcessNugetPackages(IEnumerable<string> lines)
+    private static List<NugetPackageDescription> ProcessNugetPackagesDirectives(IEnumerable<string> lines)
     {
         var nugetPackages = new List<NugetPackageDescription>();
 
         foreach (var line in lines)
         {
-            if (line.TrimStart().StartsWith(Constants.NugetDirectivePrefix))
+            if (NugetPackageRegex().IsMatch(line.Trim()))
             {
-                var packageInfo = line[Constants.NugetDirectivePrefix.Length..].Trim();
-                packageInfo = packageInfo.Replace("\"", string.Empty);
-                var parts = packageInfo.Split(',');
-                if (parts.Length == 2)
-                {
-                    nugetPackages.Add(new(parts[0].Trim(), parts[1].Trim()));
-                }
+                ProcessNugetPackage(line, nugetPackages);
             }
         }
 
         return nugetPackages;
     }
 
-    private async Task DownloadNuget(string packagePath, string packageID, string version)
+    private string ProcessLoadDirective(string directive, string path)
     {
-        var logger = NullLogger.Instance;
-        var cache = new SourceCacheContext();
-        var repositories = Repository.Factory.GetCoreV3(Constants.NugetApiResourcesUrl);
+        var realPath = GetPathFromLoadDirective(directive);
+        realPath = realPath.Replace("\"", string.Empty);
+        realPath = ResolvePath(path, realPath);
 
-        var resource = await repositories.GetResourceAsync<FindPackageByIdResource>();
-        var packageVersion = new NuGetVersion(version);
-        var dependencyInfoResource = await repositories.GetResourceAsync<DependencyInfoResource>();
-        var dependencyInfo = await dependencyInfoResource.ResolvePackage(
-            new PackageIdentity(packageID, packageVersion),
-            FrameworkConstants.CommonFrameworks.NetStandard20,
-            cache,
-            logger,
-            CancellationToken.None);
+        var relativePath = realPath.TrimRootPath(_rootPath, true);
+        var tempPath = Path.Combine(_tempFolderPath, relativePath);
 
-        foreach (var dependency in dependencyInfo.Dependencies)
+        return $"{ParsingConstants.LoadScriptDirective} \"{tempPath}\"";
+    }
+
+    private static string GetPathFromLoadDirective(string directive)
+    {
+        var segments = directive.Split(new[] { ParsingConstants.LoadScriptDirective }, 2, StringSplitOptions.None);
+        var path = segments[1].Trim();
+        return path.Replace("\"", string.Empty);
+    }
+
+    private static string ProcessNugetPackage(string directive, List<NugetPackageDescription> listOfNugetPackages)
+    {
+        var packageInfo = directive[ParsingConstants.NugetDirective.Length..].Trim();
+        packageInfo = packageInfo.Replace("\"", string.Empty);
+        var parts = packageInfo.Split(',');
+        if (parts.Length == 2)
         {
-            // Get the dependency information
-            var dependencyPackage = new PackageIdentity(dependency.Id, dependency.VersionRange.MinVersion);
-
-            // Resolve the package
-            var resolvedDependency = await dependencyInfoResource.ResolvePackage(
-                dependencyPackage,
-                FrameworkConstants.CommonFrameworks.NetStandard20,
-                cache,
-                logger,
-                CancellationToken.None);
-
-            // Download the resolved dependency
-            await DownloadPackage(resolvedDependency, repositories, packagePath, cache, logger);
+            listOfNugetPackages.Add(new(parts[0].Trim(), parts[1].Trim()));
         }
 
-        var packageDownloadContext = new PackageDownloadContext(cache);
-        var downloadResource = await repositories.GetResourceAsync<DownloadResource>();
-        var downloadResult = await downloadResource.GetDownloadResourceResultAsync(
-            new PackageIdentity(packageID, packageVersion),
-            packageDownloadContext,
-            packagePath,
-            logger,
-            CancellationToken.None);
+        return directive;
     }
 
-    private async Task DownloadPackage(
-        PackageDependencyInfo dependencyInfo,
-        SourceRepository repositories,
-        string packagePath,
-        SourceCacheContext cache,
-        ILogger logger)
-    {
-        var packageDownloadContext = new PackageDownloadContext(cache);
-        var downloadResource = await repositories.GetResourceAsync<DownloadResource>();
-        var downloadResult = await downloadResource.GetDownloadResourceResultAsync(
-            new PackageIdentity(dependencyInfo.Id, dependencyInfo.Version),
-            packageDownloadContext,
-            packagePath,
-            logger,
-            CancellationToken.None);
+    [GeneratedRegex(ParsingConstants.NugetDirectivePattern)]
+    private static partial Regex NugetPackageRegex();
 
-        // Ensure the package is saved
-        if (downloadResult.Status == DownloadResourceResultStatus.Available)
-        {
-            await using var packageStream = downloadResult.PackageStream;
-            var packageFilePath = Path.Combine(packagePath,
-                $"{dependencyInfo.Id}.{dependencyInfo.Version}{Constants.NugetPackageFileExtension}");
-            await using var fileStream = new FileStream(packageFilePath, FileMode.Create, FileAccess.Write);
-            await packageStream.CopyToAsync(fileStream);
-        }
-    }
-
-    private class NugetPackageDescription(string packageName, string version)
-    {
-        public string PackageName { get; set; } = packageName;
-        public string Version { get; set; } = version;
-    }
+    [GeneratedRegex(ParsingConstants.LoadScriptDirective)]
+    private static partial Regex LoadReferenceRegex();
 }
