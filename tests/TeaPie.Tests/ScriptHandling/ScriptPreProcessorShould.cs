@@ -1,4 +1,5 @@
 ﻿using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using TeaPie.Exceptions;
 using TeaPie.Parsing;
@@ -132,7 +133,8 @@ public sealed class ScriptPreProcessorShould
     [Fact]
     public async Task ScriptWithInvalidNugetDirectiveShouldThrowException()
     {
-        var nugetHandler = new NugetPackageHandler();
+        var nugetHandler = GetNugetHandler();
+
         var processor = CreateScriptPreProcessor(nugetHandler);
 
         List<string> referencedScripts = [];
@@ -228,8 +230,20 @@ public sealed class ScriptPreProcessorShould
         return list;
     }
 
+    private static INugetPackageHandler GetNugetHandler()
+        => new NugetPackageHandler(Substitute.For<ILogger<NugetPackageHandler>>());
+
     private static ScriptPreProcessor CreateScriptPreProcessor(INugetPackageHandler? nugetPackageHandler = null)
-        => nugetPackageHandler is null
-            ? new(Substitute.For<INugetPackageHandler>())
-            : new(nugetPackageHandler);
+    {
+        var logger = Substitute.For<ILogger<ScriptPreProcessor>>();
+
+        if (nugetPackageHandler is null)
+        {
+            return new(GetNugetHandler(), logger);
+        }
+        else
+        {
+            return new(nugetPackageHandler, logger);
+        }
+    }
 }

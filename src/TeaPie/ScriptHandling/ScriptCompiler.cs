@@ -6,7 +6,7 @@ namespace TeaPie.ScriptHandling;
 
 internal interface IScriptCompiler
 {
-    public (Script<object> script, Compilation compilation) CompileScript(string scriptContent);
+    (Script<object> script, Compilation compilation) CompileScript(string scriptContent);
 }
 
 internal class ScriptCompiler : IScriptCompiler
@@ -37,7 +37,7 @@ internal class ScriptCompiler : IScriptCompiler
     public class Globals
     {
 #pragma warning disable IDE1006 // Naming Styles
-        public TeaPie? tp { get; set; } = TeaPie.GetInstance();
+        public TeaPie? tp { get; set; } = TeaPie.Instance;
 #pragma warning restore IDE1006
     }
 }

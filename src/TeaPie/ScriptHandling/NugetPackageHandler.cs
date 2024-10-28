@@ -1,4 +1,5 @@
-﻿using NuGet.Common;
+﻿using Microsoft.Extensions.Logging;
+using NuGet.Common;
 using NuGet.Frameworks;
 using NuGet.Packaging.Core;
 using NuGet.Protocol;
@@ -10,14 +11,16 @@ namespace TeaPie.ScriptHandling;
 
 internal interface INugetPackageHandler
 {
-    public Task HandleNugetPackages(List<NugetPackageDescription> nugetPackages);
+    Task HandleNugetPackages(List<NugetPackageDescription> nugetPackages);
 }
 
-internal class NugetPackageHandler : INugetPackageHandler
+internal class NugetPackageHandler(ILogger<NugetPackageHandler> logger) : INugetPackageHandler
 {
+    private readonly ILogger<NugetPackageHandler> _logger = logger;
+
     public async Task HandleNugetPackages(List<NugetPackageDescription> nugetPackages)
     {
-        var packagePath = $"{Environment.CurrentDirectory}/{Constants.DefaultNugetPackageFolderName}";
+        var packagePath = Environment.CurrentDirectory + Path.DirectorySeparatorChar + Constants.DefaultNugetPackageFolderName;
         foreach (var package in nugetPackages)
         {
             await DownloadNuget(packagePath, package.PackageName, package.Version);
@@ -68,14 +71,18 @@ internal class NugetPackageHandler : INugetPackageHandler
         {
             throw new NugetPackageNotFoundException(packageID, version);
         }
+
+        _logger.LogTrace("NuGet Package {Name}, {Version} was successfully downloaded.",
+            dependencyInfo.Id,
+            dependencyInfo.Version.Version.ToString());
     }
 
-    private async Task DownloadPackage(
+    private static async Task DownloadPackage(
         PackageDependencyInfo dependencyInfo,
         SourceRepository repositories,
         string packagePath,
         SourceCacheContext cache,
-        ILogger logger)
+        NuGet.Common.ILogger logger)
     {
         var packageDownloadContext = new PackageDownloadContext(cache);
         var downloadResource = await repositories.GetResourceAsync<DownloadResource>();
@@ -93,6 +100,10 @@ internal class NugetPackageHandler : INugetPackageHandler
                 $"{dependencyInfo.Id}.{dependencyInfo.Version}{Constants.NugetPackageFileExtension}");
             await using var fileStream = new FileStream(packageFilePath, FileMode.Create, FileAccess.Write);
             await packageStream.CopyToAsync(fileStream);
+        }
+        else if (downloadResult.Status == DownloadResourceResultStatus.NotFound)
+        {
+            throw new NugetPackageNotFoundException(dependencyInfo.Id, dependencyInfo.Version.Version.ToString());
         }
     }
 }

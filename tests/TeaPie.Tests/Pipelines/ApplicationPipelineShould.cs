@@ -1,4 +1,5 @@
-﻿using NSubstitute;
+﻿using Microsoft.Extensions.Logging;
+using NSubstitute;
 using TeaPie.Pipelines;
 using TeaPie.Pipelines.Application;
 
@@ -11,7 +12,7 @@ public class ApplicationPipelineShould
     {
         var pipeline = new ApplicationPipeline();
         var cancellationToken = CancellationToken.None;
-        var context = new ApplicationContext(string.Empty);
+        var context = CreateApplicationContext(string.Empty);
         var steps = new IPipelineStep[3];
         IPipelineStep step;
 
@@ -35,7 +36,7 @@ public class ApplicationPipelineShould
     public async Task PipelineStepsShouldBeExecutedInCorrectOrderWhenInsertedOneByOne()
     {
         var pipeline = new ApplicationPipeline();
-        var context = new ApplicationContext(string.Empty);
+        var context = CreateApplicationContext(string.Empty);
         var steps = new IdentifyingStep[5];
         var registerOfSteps = new List<int>();
 
@@ -62,7 +63,7 @@ public class ApplicationPipelineShould
     public async Task PipelineStepsShouldBeExecutedInCorrectOrderWhenInsertedAsRange()
     {
         var pipeline = new ApplicationPipeline();
-        var context = new ApplicationContext(string.Empty);
+        var context = CreateApplicationContext(string.Empty);
         var steps = new IdentifyingStep[7];
         var registerOfSteps = new List<int>();
 
@@ -90,24 +91,11 @@ public class ApplicationPipelineShould
         var pipeline = new ApplicationPipeline();
         pipeline.AddSteps(new GenerativeStep(pipeline));
 
-        var context = new ApplicationContext(string.Empty);
+        var context = CreateApplicationContext(string.Empty);
 
         await pipeline.Run(context);
     }
 
-    private class GenerativeStep(IPipeline pipeline) : IPipelineStep
-    {
-        private readonly IPipeline _pipeline = pipeline;
-
-        public async Task Execute(
-            ApplicationContext context,
-            CancellationToken cancellationToken = default)
-        {
-            _pipeline.AddSteps(new DummyStep());
-            _pipeline.AddSteps(new DummyStep());
-            _pipeline.AddSteps(new DummyStep());
-
-            await Task.CompletedTask;
-        }
-    }
+    private static ApplicationContext CreateApplicationContext(string path)
+        => new(path, Substitute.For<ILogger>());
 }
