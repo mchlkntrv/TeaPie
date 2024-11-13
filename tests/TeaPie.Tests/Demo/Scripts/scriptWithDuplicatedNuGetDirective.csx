@@ -1,4 +1,5 @@
 ﻿#nuget "Newtonsoft.Json, 13.0.3"
+#nuget "Newtonsoft.Json, 13.0.3"
 
 using Newtonsoft.Json;
 

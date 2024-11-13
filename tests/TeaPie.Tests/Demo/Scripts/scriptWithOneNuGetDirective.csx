@@ -1,12 +1,6 @@
 ﻿#nuget "Newtonsoft.Json, 13.0.3"
-#nuget "System.IO.Abstractions, 13.2.6"
-#nuget "System.Net.Http, 4.3.4"
 
 using Newtonsoft.Json;
-using System.IO.Abstractions;
-using System.Net.Http;
-
-tp.Logger.LogInformation("I am script with multiple Nuget Packages and I am about to run (marathon)...");
 
 public class Person
 {
