@@ -8,8 +8,9 @@ using TeaPie.Pipelines.TemporaryFolder;
 
 var services = new ServiceCollection();
 services.ConfigureServices();
-services.ConfigureLogging();
+services.ConfigureLogging(LogLevel.Information);
 services.ConfigureAccessors();
+services.ConfigureHttpClient();
 services.AddSteps();
 services.AddSingleton<IPipeline, ApplicationPipeline>();
 

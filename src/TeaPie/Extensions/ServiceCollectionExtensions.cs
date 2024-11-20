@@ -1,8 +1,13 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Serilog;
+using Serilog.Events;
 using System.Reflection;
+using TeaPie.Parsing;
 using TeaPie.Pipelines;
+using TeaPie.Pipelines.Requests;
 using TeaPie.Pipelines.Scripts;
+using TeaPie.Requests;
 using TeaPie.ScriptHandling;
 using TeaPie.StructureExploration;
 
@@ -18,18 +23,30 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IScriptCompiler, ScriptCompiler>();
         services.AddSingleton<INuGetPackageHandler, NuGetPackageHandler>();
 
+        services.AddSingleton<IHttpFileParser, HttpFileParser>();
+        services.AddSingleton<IHttpRequestHeadersProvider, HttpRequestHeadersProvider>();
+
         return services;
     }
 
-    public static IServiceCollection ConfigureLogging(this IServiceCollection services)
+    public static IServiceCollection ConfigureLogging(this IServiceCollection services, LogLevel minimumLevel)
     {
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
-            .WriteTo.Console()
-            .CreateLogger();
+        if (minimumLevel == LogLevel.None)
+        {
+            Log.Logger = Serilog.Core.Logger.None;
+        }
+        else
+        {
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Is(minimumLevel.ToSerilogLevel())
+                .MinimumLevel.Override(
+                    "System.Net.Http",
+                    minimumLevel >= LogLevel.Information ? LogEventLevel.Warning : LogEventLevel.Debug)
+                .WriteTo.Console()
+                .CreateLogger();
+        }
 
-        services.AddLogging(loggingBuilder =>
-            loggingBuilder.AddSerilog(dispose: true));
+        services.AddLogging(loggingBuilder => loggingBuilder.AddSerilog(dispose: true));
 
         return services;
     }
@@ -46,9 +63,19 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    public static IServiceCollection ConfigureHttpClient(this IServiceCollection services)
+    {
+        services.AddHttpClient<HttpRequestHeadersProvider>();
+        services.AddHttpClient<ExecuteScriptStep>();
+
+        return services;
+    }
+
     public static IServiceCollection ConfigureAccessors(this IServiceCollection services)
     {
         services.AddScoped<IScriptExecutionContextAccessor, ScriptExecutionContextAccessor>();
+        services.AddScoped<IRequestExecutionContextAccessor, RequestExecutionContextAccessor>();
+
         return services;
     }
 
