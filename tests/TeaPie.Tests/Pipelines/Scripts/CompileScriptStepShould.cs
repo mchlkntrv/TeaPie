@@ -5,8 +5,8 @@ using NSubstitute;
 using System.Data;
 using TeaPie.Pipelines.Application;
 using TeaPie.Pipelines.Scripts;
-using TeaPie.ScriptHandling;
-using TeaPie.Tests.ScriptHandling;
+using TeaPie.Scripts;
+using TeaPie.Tests.Scripts;
 
 namespace TeaPie.Tests.Pipelines.Scripts;
 

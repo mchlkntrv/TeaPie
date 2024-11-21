@@ -3,9 +3,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using System.Data;
-using TeaPie.ScriptHandling;
+using TeaPie.Scripts;
 
-namespace TeaPie.Tests.ScriptHandling;
+namespace TeaPie.Tests.Scripts;
 
 public class ScriptCompilerShould
 {

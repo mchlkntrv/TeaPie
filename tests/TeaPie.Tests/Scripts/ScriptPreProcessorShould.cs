@@ -3,9 +3,9 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using TeaPie.Exceptions;
 using TeaPie.Parsing;
-using TeaPie.ScriptHandling;
+using TeaPie.Scripts;
 
-namespace TeaPie.Tests.ScriptHandling;
+namespace TeaPie.Tests.Scripts;
 
 public sealed class ScriptPreProcessorShould
 {
@@ -42,7 +42,7 @@ public sealed class ScriptPreProcessorShould
         await processor.Invoking(async processor => await processor.ProcessScript(
             ScriptIndex.ScriptWithNonExistingScriptLoadDirectivePath,
             await File.ReadAllTextAsync(ScriptIndex.ScriptWithNonExistingScriptLoadDirectivePath),
-            ScriptIndex.RootFolderPath,
+            ScriptIndex.RootFolderFullPath,
             _tempFolderPath,
             referencedScripts))
             .Should().ThrowAsync<FileNotFoundException>();
@@ -92,7 +92,7 @@ public sealed class ScriptPreProcessorShould
         foreach (var path in scriptRelativePathsWithoutFileExtensions)
         {
             referencedScripts.Should()
-                .Contain(Path.Combine(ScriptIndex.RootSubFolderPath, path + Constants.ScriptFileExtension));
+                .Contain(Path.Combine(ScriptIndex.RootSubFolderFullPath, path + Constants.ScriptFileExtension));
         }
 
         processedContent.Should().Contain(expectedDirectives);
@@ -110,7 +110,7 @@ public sealed class ScriptPreProcessorShould
         await processor.Invoking(async processor => await processor.ProcessScript(
             ScriptIndex.ScriptWithInvalidNuGetDirectivePath,
             await File.ReadAllTextAsync(ScriptIndex.ScriptWithInvalidNuGetDirectivePath),
-            ScriptIndex.RootFolderPath,
+            ScriptIndex.RootFolderFullPath,
             _tempFolderPath,
             referencedScripts))
             .Should().ThrowAsync<NuGetPackageNotFoundException>();
@@ -185,7 +185,7 @@ public sealed class ScriptPreProcessorShould
         foreach (var path in scriptRelativePathsWithoutFileExtensions)
         {
             referencedScripts.Should()
-                .Contain(Path.Combine(ScriptIndex.RootSubFolderPath, path + Constants.ScriptFileExtension));
+                .Contain(Path.Combine(ScriptIndex.RootSubFolderFullPath, path + Constants.ScriptFileExtension));
         }
 
         await nugetHandler.Received(1).HandleNuGetPackages(Arg.Any<List<NuGetPackageDescription>>());
@@ -196,14 +196,14 @@ public sealed class ScriptPreProcessorShould
         => await processor.ProcessScript(
             scriptPath,
             await File.ReadAllTextAsync(scriptPath),
-            ScriptIndex.RootFolderPath,
+            ScriptIndex.RootFolderFullPath,
             _tempFolderPath,
             referencedScripts);
 
     private List<string> GetExpectedDirectives(params string[] names)
     {
         List<string> list = [];
-        var tmpBasePath = Path.Combine(_tempFolderPath, ScriptIndex.RootFolderName, ScriptIndex.RootSubFolder);
+        var tmpBasePath = Path.Combine(_tempFolderPath, ScriptIndex.RootFolderName, ScriptIndex.RootSubFolderName);
 
         for (var i = 0; i < names.Length; i++)
         {
@@ -215,7 +215,7 @@ public sealed class ScriptPreProcessorShould
     }
 
     private static INuGetPackageHandler GetNuGetHandler()
-        => new NuGetPackageHandler(Substitute.For<ILogger<NuGetPackageHandler>>());
+        => new NuGetPackageHandler(Substitute.For<ILogger<NuGetPackageHandler>>(), NuGet.Common.NullLogger.Instance);
 
     private static ScriptPreProcessor CreateScriptPreProcessor(INuGetPackageHandler? nugetPackageHandler = null)
     {

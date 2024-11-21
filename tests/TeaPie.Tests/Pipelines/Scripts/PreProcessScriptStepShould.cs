@@ -2,8 +2,8 @@
 using NSubstitute;
 using TeaPie.Pipelines.Application;
 using TeaPie.Pipelines.Scripts;
-using TeaPie.ScriptHandling;
-using TeaPie.Tests.ScriptHandling;
+using TeaPie.Scripts;
+using TeaPie.Tests.Scripts;
 
 namespace TeaPie.Tests.Pipelines.Scripts;
 
@@ -19,7 +19,7 @@ public class PreProcessScriptStepShould
 
         var processor = Substitute.For<IScriptPreProcessor>();
 
-        var rootPath = ScriptIndex.RootSubFolderPath;
+        var rootPath = ScriptIndex.RootSubFolderFullPath;
         var tempPath = Path.GetTempPath();
 
         var pipeline = new ApplicationPipeline();

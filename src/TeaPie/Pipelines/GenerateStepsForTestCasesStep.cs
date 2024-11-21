@@ -4,13 +4,13 @@ using TeaPie.Extensions;
 using TeaPie.Pipelines.Application;
 using TeaPie.Pipelines.Requests;
 using TeaPie.Pipelines.Scripts;
-using TeaPie.ScriptHandling;
+using TeaPie.Scripts;
 using TeaPie.StructureExploration.IO;
 using File = TeaPie.StructureExploration.IO.File;
 
 namespace TeaPie.Pipelines;
 
-internal sealed class StepsGenerationStep(IPipeline pipeline) : IPipelineStep
+internal sealed class GenerateStepsForTestCasesStep(IPipeline pipeline) : IPipelineStep
 {
     private readonly IPipeline _pipeline = pipeline;
 

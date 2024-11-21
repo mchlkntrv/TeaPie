@@ -3,12 +3,13 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
 using System.Reflection;
+using TeaPie.Logging;
 using TeaPie.Parsing;
 using TeaPie.Pipelines;
 using TeaPie.Pipelines.Requests;
 using TeaPie.Pipelines.Scripts;
 using TeaPie.Requests;
-using TeaPie.ScriptHandling;
+using TeaPie.Scripts;
 using TeaPie.StructureExploration;
 
 namespace TeaPie.Extensions;
@@ -38,18 +39,22 @@ public static class ServiceCollectionExtensions
         else
         {
             Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Is(minimumLevel.ToSerilogLevel())
-                .MinimumLevel.Override(
-                    "System.Net.Http",
-                    minimumLevel >= LogLevel.Information ? LogEventLevel.Warning : LogEventLevel.Debug)
+                .MinimumLevel.Is(minimumLevel.ToSerilogLogLevel())
+                .MinimumLevel.Override("System.Net.Http", ApplyRestrictiveLogLevelRule(minimumLevel))
+                .MinimumLevel.Override("TeaPie.Logging.NuGetLoggerAdapter", ApplyRestrictiveLogLevelRule(minimumLevel))
                 .WriteTo.Console()
                 .CreateLogger();
         }
+
+        services.AddSingleton<NuGet.Common.ILogger, NuGetLoggerAdapter>();
 
         services.AddLogging(loggingBuilder => loggingBuilder.AddSerilog(dispose: true));
 
         return services;
     }
+
+    private static LogEventLevel ApplyRestrictiveLogLevelRule(LogLevel minimumLevel)
+        => minimumLevel >= LogLevel.Information ? LogEventLevel.Warning : LogEventLevel.Debug;
 
     public static IServiceCollection AddSteps(this IServiceCollection services)
     {
