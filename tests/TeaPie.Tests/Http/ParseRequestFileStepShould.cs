@@ -2,13 +2,14 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
-using TeaPie.Parsing;
+using TeaPie.Http;
 using TeaPie.Pipelines.Application;
 using TeaPie.Pipelines.Requests;
 using TeaPie.Requests;
 using TeaPie.Tests.Requests;
+using TeaPie.Variables;
 
-namespace TeaPie.Tests.Pipelines.Requests;
+namespace TeaPie.Tests.Http;
 
 public class ParseRequestFileStepShould
 {
@@ -83,6 +84,9 @@ public class ParseRequestFileStepShould
         var clientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
         var headersProvider = new HttpRequestHeadersProvider(clientFactory);
 
-        return new HttpFileParser(headersProvider);
+        var variables = new global::TeaPie.Variables.Variables();
+        var resolver = new VariablesResolver(variables);
+
+        return new HttpFileParser(headersProvider, resolver);
     }
 }

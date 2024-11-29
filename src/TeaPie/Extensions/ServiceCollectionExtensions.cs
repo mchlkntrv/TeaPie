@@ -3,14 +3,15 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
 using System.Reflection;
+using TeaPie.Http;
 using TeaPie.Logging;
-using TeaPie.Parsing;
 using TeaPie.Pipelines;
 using TeaPie.Pipelines.Requests;
 using TeaPie.Pipelines.Scripts;
 using TeaPie.Requests;
 using TeaPie.Scripts;
 using TeaPie.StructureExploration;
+using TeaPie.Variables;
 
 namespace TeaPie.Extensions;
 
@@ -27,10 +28,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IHttpFileParser, HttpFileParser>();
         services.AddSingleton<IHttpRequestHeadersProvider, HttpRequestHeadersProvider>();
 
+        services.AddSingleton<IVariables, Variables.Variables>();
+        services.AddSingleton<IVariablesResolver, VariablesResolver>();
+
         return services;
     }
 
-    public static IServiceCollection ConfigureLogging(this IServiceCollection services, LogLevel minimumLevel, string pathToLogFile = "")
+    public static IServiceCollection ConfigureLogging(
+        this IServiceCollection services,
+        LogLevel minimumLevel,
+        string pathToLogFile = "")
     {
         if (minimumLevel == LogLevel.None)
         {

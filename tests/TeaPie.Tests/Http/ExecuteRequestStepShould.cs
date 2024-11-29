@@ -3,13 +3,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using System.Net;
-using TeaPie.Parsing;
+using TeaPie.Http;
 using TeaPie.Pipelines.Application;
 using TeaPie.Pipelines.Requests;
 using TeaPie.Requests;
 using TeaPie.Tests.Requests;
+using TeaPie.Variables;
 
-namespace TeaPie.Tests.Pipelines.Requests;
+namespace TeaPie.Tests.Http;
 
 public class ExecuteRequestStepShould
 {
@@ -103,8 +104,10 @@ public class ExecuteRequestStepShould
     {
         var clientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
         var headersProvider = new HttpRequestHeadersProvider(clientFactory);
+        var variables = new global::TeaPie.Variables.Variables();
+        var variablesResolver = new VariablesResolver(variables);
 
-        return new HttpFileParser(headersProvider);
+        return new HttpFileParser(headersProvider, variablesResolver);
     }
 
     private class CustomHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responseGenerator) : HttpMessageHandler
