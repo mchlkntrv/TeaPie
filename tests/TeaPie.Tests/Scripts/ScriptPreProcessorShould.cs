@@ -1,7 +1,6 @@
 ﻿using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
-using TeaPie.Exceptions;
 using TeaPie.Scripts;
 
 namespace TeaPie.Tests.Scripts;
@@ -11,7 +10,7 @@ public sealed class ScriptPreProcessorShould
     private readonly string _tempFolderPath = Path.Combine(Path.GetTempPath(), Constants.ApplicationName);
 
     [Fact]
-    public async Task EmptyScriptFileShouldNotCauseProblem()
+    public async Task PreProcessEmptyScriptWithoutAnyProblem()
     {
         var processor = CreateScriptPreProcessor();
         List<string> referencedScripts = [];
@@ -21,7 +20,7 @@ public sealed class ScriptPreProcessorShould
     }
 
     [Fact]
-    public async Task ScriptWithoutAnyDirectivesShouldRemainTheSame()
+    public async Task ReturnSameScriptWhenPreProcessingScriptWithoutAnyDirectives()
     {
         var processor = CreateScriptPreProcessor();
         List<string> referencedScripts = [];
@@ -33,7 +32,7 @@ public sealed class ScriptPreProcessorShould
     }
 
     [Fact]
-    public async Task ScriptWithNonExistingScriptReferenceShouldThrowException()
+    public async Task ThrowProperExceptionWhenPreProcessingScriptWithReferenceToNonExistingScript()
     {
         var processor = CreateScriptPreProcessor();
         List<string> referencedScripts = [];
@@ -48,7 +47,7 @@ public sealed class ScriptPreProcessorShould
     }
 
     [Fact]
-    public async Task ScriptWithOneLoadDirectiveShouldBeResolvedCorrectly()
+    public async Task PreProcessScriptWithOneLoadDirectiveCorrectly()
     {
         var processor = CreateScriptPreProcessor();
 
@@ -68,7 +67,7 @@ public sealed class ScriptPreProcessorShould
     }
 
     [Fact]
-    public async Task ScriptWithMultipleLoadDirectivesShouldBeResolvedCorrectly()
+    public async Task PreProcessScriptWithMultipleLoadDirectivesCorrectly()
     {
         var processor = CreateScriptPreProcessor();
         const int numberOfDirectives = 3;
@@ -98,7 +97,7 @@ public sealed class ScriptPreProcessorShould
     }
 
     [Fact]
-    public async Task ScriptWithInvalidNuGetDirectiveShouldThrowException()
+    public async Task ThrowProperExceptionWhenCompilingScriptWithInvalidNuGetDirective()
     {
         var nugetHandler = GetNuGetHandler();
 
@@ -116,7 +115,7 @@ public sealed class ScriptPreProcessorShould
     }
 
     [Fact]
-    public async Task ScriptWithOneNuGetDirectiveShouldBeHandledProperly()
+    public async Task PreProcessScriptWithOneNuGetDirectiveCorrectly()
     {
         var nugetHandler = Substitute.For<INuGetPackageHandler>();
         var processor = CreateScriptPreProcessor(nugetHandler);
@@ -129,7 +128,7 @@ public sealed class ScriptPreProcessorShould
     }
 
     [Fact]
-    public async Task ScriptWithMultipleNuGetDirectivesShouldBeHandledProperly()
+    public async Task PreProcessScriptWithMultipleNuGetDirectivesCorrectly()
     {
         var nugetHandler = Substitute.For<INuGetPackageHandler>();
         var processor = CreateScriptPreProcessor(nugetHandler);
@@ -143,7 +142,7 @@ public sealed class ScriptPreProcessorShould
     }
 
     [Fact]
-    public async Task ScriptWithDuplicatedNuGetDirectivesShouldBeHandledProperly()
+    public async Task PreProcessScriptWithDuplicatedNuGetDirectivesCorrectly()
     {
         var nugetHandler = Substitute.For<INuGetPackageHandler>();
         var processor = CreateScriptPreProcessor(nugetHandler);
@@ -157,7 +156,7 @@ public sealed class ScriptPreProcessorShould
     }
 
     [Fact]
-    public async Task ScriptWithMultipleLoadAndNuGetDirectivesShouldBeHandledProperly()
+    public async Task PreProcessScriptWithMultipleLoadAndNuGetDirectivesCorrectly()
     {
         var nugetHandler = Substitute.For<INuGetPackageHandler>();
         var processor = CreateScriptPreProcessor(nugetHandler);
@@ -213,8 +212,8 @@ public sealed class ScriptPreProcessorShould
         return list;
     }
 
-    private static INuGetPackageHandler GetNuGetHandler()
-        => new NuGetPackageHandler(Substitute.For<ILogger<NuGetPackageHandler>>(), NuGet.Common.NullLogger.Instance);
+    private static NuGetPackageHandler GetNuGetHandler()
+        => new(Substitute.For<ILogger<NuGetPackageHandler>>(), NuGet.Common.NullLogger.Instance);
 
     private static ScriptPreProcessor CreateScriptPreProcessor(INuGetPackageHandler? nugetPackageHandler = null)
     {

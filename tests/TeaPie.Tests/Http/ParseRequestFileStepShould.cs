@@ -3,10 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using TeaPie.Http;
-using TeaPie.Pipelines.Application;
-using TeaPie.Pipelines.Requests;
-using TeaPie.Requests;
-using TeaPie.Tests.Requests;
 using TeaPie.Variables;
 
 namespace TeaPie.Tests.Http;
@@ -14,7 +10,7 @@ namespace TeaPie.Tests.Http;
 public class ParseRequestFileStepShould
 {
     [Fact]
-    public async Task RequestContextWithoutRawContentShouldThrowProperException()
+    public async Task ThrowProperExceptionWhenRequestContextIsWithoutRawContent()
     {
         var context = RequestHelper.PrepareContext(RequestsIndex.RequestWithCommentsBodyAndHeadersPath, false);
 
@@ -32,7 +28,7 @@ public class ParseRequestFileStepShould
     }
 
     [Fact]
-    public async Task RequestMessageShouldBeAssignedCorrectly()
+    public async Task AssignRequestMessageCorrectly()
     {
         var context = RequestHelper.PrepareContext(RequestsIndex.RequestWithCommentsBodyAndHeadersPath);
 
@@ -55,7 +51,7 @@ public class ParseRequestFileStepShould
     }
 
     [Fact]
-    public async Task ParseMethodOnParserShouldBeCalled()
+    public async Task CallParseMethodOnParserDuringExecution()
     {
         var context = RequestHelper.PrepareContext(RequestsIndex.PlainGetRequestPath);
 

@@ -3,17 +3,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using System.Data;
-using TeaPie.Pipelines.Application;
-using TeaPie.Pipelines.Scripts;
 using TeaPie.Scripts;
-using TeaPie.Tests.Scripts;
 
-namespace TeaPie.Tests.Pipelines.Scripts;
+namespace TeaPie.Tests.Scripts;
 
 public class CompileScriptStepShould
 {
     [Fact]
-    public async void CompilerShouldReceiveCallToCompileTheScript()
+    public async void CallCompileMethodOnCompilerDuringExecution()
     {
         var logger = NullLogger.Instance;
         var context = ScriptHelper.GetScriptExecutionContext(ScriptIndex.PlainScriptPath);
@@ -34,7 +31,7 @@ public class CompileScriptStepShould
     }
 
     [Fact]
-    public async void ScriptWithSyntaxErrorShouldThrowProperException()
+    public async void ThrowProperExceptionWhenCompilingScriptWithSyntaxError()
     {
         var logger = NullLogger.Instance;
         var context = ScriptHelper.GetScriptExecutionContext(ScriptIndex.ScriptWithSyntaxErrorPath);

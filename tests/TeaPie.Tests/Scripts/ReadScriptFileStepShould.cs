@@ -1,16 +1,14 @@
 ﻿using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
-using TeaPie.Pipelines.Application;
-using TeaPie.Pipelines.Scripts;
-using TeaPie.Tests.Scripts;
+using TeaPie.Scripts;
 
-namespace TeaPie.Tests.Pipelines.Scripts;
+namespace TeaPie.Tests.Scripts;
 
 public class ReadScriptFileStepShould
 {
     [Fact]
-    public async Task ScriptContextWithInvalidPathShouldThrowProperException()
+    public async Task ThrowProperExceptionWhenScriptContextHasInvalidPath()
     {
         var context = ScriptHelper.GetScriptExecutionContext($"{Guid.NewGuid()}{Constants.ScriptFileExtension}");
 
@@ -26,7 +24,7 @@ public class ReadScriptFileStepShould
     }
 
     [Fact]
-    public async Task RawContentOfScriptFileShouldBeAssignedCorrectly()
+    public async Task AssignRawContentOfScriptFileCorrectly()
     {
         var context = ScriptHelper.GetScriptExecutionContext(ScriptIndex.ScriptWithMultipleLoadAndNuGetDirectivesPath);
 

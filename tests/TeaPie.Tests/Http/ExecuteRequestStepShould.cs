@@ -4,10 +4,6 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using System.Net;
 using TeaPie.Http;
-using TeaPie.Pipelines.Application;
-using TeaPie.Pipelines.Requests;
-using TeaPie.Requests;
-using TeaPie.Tests.Requests;
 using TeaPie.Variables;
 
 namespace TeaPie.Tests.Http;
@@ -21,7 +17,7 @@ public class ExecuteRequestStepShould
     private const string MediaType = "application/json";
 
     [Fact]
-    public async Task RequestContextWithoutRequestMessageShouldThrowProperException()
+    public async Task ThrowProperExceptionWhenRequestContextIsWithoutRequestMessage()
     {
         var serviceProvider = ConfigureServicesAndGetProvider();
 
@@ -40,7 +36,7 @@ public class ExecuteRequestStepShould
     }
 
     [Fact]
-    public async Task ResponseAfterRequestExecutionHasToBeCorrect()
+    public async Task AssignCorrectResponseAfterRequestExecution()
     {
         var serviceProvider = ConfigureServicesAndGetProvider();
 
@@ -72,8 +68,8 @@ public class ExecuteRequestStepShould
         context.Response!.RequestMessage!.RequestUri.Should().BeEquivalentTo(new Uri(Path));
     }
 
-    private static HttpMessageHandler CreateAndConfigureMessageHandler()
-        => new CustomHttpMessageHandler(request =>
+    private static CustomHttpMessageHandler CreateAndConfigureMessageHandler()
+        => new(request =>
         {
             if (request.Method == _method && request.RequestUri?.Equals(Path) is not null)
             {
@@ -91,7 +87,7 @@ public class ExecuteRequestStepShould
             throw new InvalidOperationException("Unsupported request.");
         });
 
-    private static IServiceProvider ConfigureServicesAndGetProvider()
+    private static ServiceProvider ConfigureServicesAndGetProvider()
     {
         var services = new ServiceCollection();
         services.AddHttpClient();
