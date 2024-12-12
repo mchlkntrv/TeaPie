@@ -1,11 +1,14 @@
 ﻿using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using TeaPie.Http;
+using TeaPie.Http.Headers;
+using TeaPie.StructureExploration;
 using TeaPie.Variables;
+using File = TeaPie.StructureExploration.File;
 
 namespace TeaPie.Tests.Http;
 
-public class HttpFileParserShould
+public class HttpRequestParserShould
 {
     private readonly Uri _baseRequestUri = new("https://jsonplaceholder.typicode.com/posts");
     private readonly Uri _specificRequestUri = new("https://jsonplaceholder.typicode.com/posts/1");
@@ -14,28 +17,37 @@ public class HttpFileParserShould
     [Fact]
     public async Task ParseSimpleRequestCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.SimpleRequestPath);
+        var parsed = await GetParsedContext(RequestsIndex.SimpleRequestPath);
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Get, _specificRequestUri, false);
     }
 
     [Fact]
     public async Task ParseRequestWithCommentCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.RequestWithCommentPath);
+        var parsed = await GetParsedContext(RequestsIndex.RequestWithCommentPath);
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Get, _specificRequestUri, false);
     }
 
     [Fact]
     public async Task ParseRequestWithCommentsCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.RequestWithCommentsPath);
+        var parsed = await GetParsedContext(RequestsIndex.RequestWithCommentsPath);
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Get, _specificRequestUri, false);
+    }
+
+    [Fact]
+    public async Task ParseRequestWithNameCorrectly()
+    {
+        var parsed = await GetParsedContext(RequestsIndex.RequestWithNamePath);
+        CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Get, _specificRequestUri, false);
+
+        parsed.Name.Should().BeEquivalentTo("NamedRequest");
     }
 
     [Fact]
     public async Task ParseRequestWithJsonBodyCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.RequestWithJsonBodyPath);
+        var parsed = await GetParsedContext(RequestsIndex.RequestWithJsonBodyPath);
 
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Post, _baseRequestUri, true);
         await CheckBody(parsed, "\"title\": \"foo\"", "\"body\": \"bar\"", "\"userId\": 1");
@@ -44,28 +56,28 @@ public class HttpFileParserShould
     [Fact]
     public async Task ParseRequestWithHeaderCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.RequestWithHeaderPath);
+        var parsed = await GetParsedContext(RequestsIndex.RequestWithHeaderPath);
 
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Get, _specificRequestUri, false);
 
-        parsed.Headers.UserAgent.ToString().Should().Be("UnitTest/1.0");
+        parsed.Request!.Headers.UserAgent.ToString().Should().Be("UnitTest/1.0");
     }
 
     [Fact]
     public async Task ParseRequestWithHeadersCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.RequestWithHeadersPath);
+        var parsed = await GetParsedContext(RequestsIndex.RequestWithHeadersPath);
 
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Get, _specificRequestUri, false);
 
-        parsed.Headers.UserAgent.ToString().Should().Be("UnitTest/1.0");
-        parsed.Headers.Accept.ToString().Should().Contain("application/json");
+        parsed.Request!.Headers.UserAgent.ToString().Should().Be("UnitTest/1.0");
+        parsed.Request.Headers.Accept.ToString().Should().Contain("application/json");
     }
 
     [Fact]
     public async Task ParseRequestWithBodyAndHeaderCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.RequestWithBodyAndHeadersPath);
+        var parsed = await GetParsedContext(RequestsIndex.RequestWithBodyAndHeadersPath);
 
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Post, _baseRequestUri, true);
         await CheckBody(parsed, "\"title\": \"foo\"");
@@ -74,38 +86,40 @@ public class HttpFileParserShould
     [Fact]
     public async Task ParseRequestWithBodyAndHeadersCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.RequestWithBodyAndHeadersPath);
+        var parsed = await GetParsedContext(RequestsIndex.RequestWithBodyAndHeadersPath);
 
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Post, _baseRequestUri, true);
         await CheckBody(parsed, "\"title\": \"foo\"", "\"body\": \"bar\"", "\"userId\": 1");
 
-        parsed.Headers.UserAgent.ToString().Should().Be("UnitTest/1.0");
-        parsed.Headers.GetValues("X-Test-Case").Should().Contain("RequestWithBodyAndHeaders");
+        parsed.Request!.Headers.UserAgent.ToString().Should().Be("UnitTest/1.0");
+        parsed.Request!.Headers.GetValues("X-Test-Case").Should().Contain("RequestWithBodyAndHeaders");
     }
 
     [Fact]
-    public async Task ParseRequestWithCommentsBodyAndHeadersCorrectly()
+    public async Task ParseFullyStructuredRequestCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.RequestWithCommentsBodyAndHeadersPath);
+        var parsed = await GetParsedContext(RequestsIndex.RequestWithFullStructure);
 
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Post, _baseRequestUri, true);
         await CheckBody(parsed, "\"title\": \"foo\"", "\"body\": \"bar\"", "\"userId\": 1");
 
-        parsed.Headers.UserAgent.ToString().Should().Be("UnitTest/1.0");
-        parsed.Headers.GetValues("X-Test-Case").Should().Contain("RequestWithCommentsBodyAndHeaders");
+        parsed.Request!.Headers.UserAgent.ToString().Should().Be("UnitTest/1.0");
+        parsed.Request.Headers.GetValues("X-Test-Case").Should().Contain("RequestWithCommentsBodyAndHeaders");
+
+        parsed.Name.Should().BeEquivalentTo("FullyStructuredRequest");
     }
 
     [Fact]
     public async Task ParseGetRequestCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.PlainGetRequestPath);
+        var parsed = await GetParsedContext(RequestsIndex.PlainGetRequestPath);
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Get, _baseRequestUri, false);
     }
 
     [Fact]
     public async Task ParsePostRequestCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.PlainPostRequestPath);
+        var parsed = await GetParsedContext(RequestsIndex.PlainPostRequestPath);
 
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Post, _baseRequestUri, true);
         await CheckBody(parsed, "{" + Environment.NewLine +
@@ -118,7 +132,7 @@ public class HttpFileParserShould
     [Fact]
     public async Task ParsePutRequestCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.PlainPutRequestPath);
+        var parsed = await GetParsedContext(RequestsIndex.PlainPutRequestPath);
 
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Put, _specificRequestUri, true);
         await CheckBody(parsed, "{" + Environment.NewLine +
@@ -132,7 +146,7 @@ public class HttpFileParserShould
     [Fact]
     public async Task ParsePatchRequestCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.PlainPatchRequestPath);
+        var parsed = await GetParsedContext(RequestsIndex.PlainPatchRequestPath);
 
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Patch, _specificRequestUri, true);
         await CheckBody(parsed, "\"title\": \"patched title\"");
@@ -141,32 +155,32 @@ public class HttpFileParserShould
     [Fact]
     public async Task ParseDeleteRequestCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.PlainDeleteRequestPath);
+        var parsed = await GetParsedContext(RequestsIndex.PlainDeleteRequestPath);
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Delete, _specificRequestUri, false);
     }
 
     [Fact]
     public async Task ParseHeadRequestCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.PlainHeadRequestPath);
+        var parsed = await GetParsedContext(RequestsIndex.PlainHeadRequestPath);
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Head, _specificRequestUri, false);
     }
 
     [Fact]
     public async Task ParseOptionsRequestCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.PlainOptionsRequestPath);
+        var parsed = await GetParsedContext(RequestsIndex.PlainOptionsRequestPath);
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Options, _specificRequestUri, false);
     }
 
     [Fact]
     public async Task ParseTraceRequestCorrectly()
     {
-        var parsed = await GetParsedFile(RequestsIndex.PlainTraceRequestPath);
+        var parsed = await GetParsedContext(RequestsIndex.PlainTraceRequestPath);
         CheckMethodUriAndExistenceOfContent(parsed, HttpMethod.Trace, _traceRequestUri, false);
     }
 
-    private static async Task<HttpRequestMessage> GetParsedFile(string path)
+    private static async Task<RequestExecutionContext> GetParsedContext(string path)
     {
         var services = new ServiceCollection();
         services.AddHttpClient();
@@ -177,33 +191,49 @@ public class HttpFileParserShould
         var headersProvider = new HttpRequestHeadersProvider(clientFactory);
 
         var variables = new global::TeaPie.Variables.Variables();
-        var resolver = new VariablesResolver(variables);
+        var variablesResolver = new VariablesResolver(variables, serviceProvider);
+        var headersResolver = new HeadersHandler();
 
-        var parser = new HttpFileParser(headersProvider, resolver);
-        return parser.Parse(await File.ReadAllTextAsync(path));
+        var parser = new HttpRequestParser(headersProvider, variablesResolver, headersResolver);
+
+        var folder =
+            new Folder(RequestsIndex.RootFolderFullPath, RequestsIndex.RootFolderName, RequestsIndex.RootFolderName, null);
+        var file =
+            new File(path, path.TrimRootPath(RequestsIndex.RootFolderFullPath), Path.GetFileName(path), folder);
+
+        var requestContext = new RequestExecutionContext(file)
+        {
+            RawContent = await System.IO.File.ReadAllTextAsync(path)
+        };
+
+        parser.Parse(requestContext);
+        return requestContext;
     }
 
     private static void CheckMethodUriAndExistenceOfContent(
-        HttpRequestMessage parsed,
+        RequestExecutionContext parsed,
         HttpMethod method,
         Uri uri,
         bool shouldHaveContent)
     {
-        parsed.Method.Should().Be(method);
-        parsed.RequestUri.Should().BeEquivalentTo(uri);
+        parsed.Request.Should().NotBeNull();
+
+        parsed.Request!.Method.Should().Be(method);
+        parsed.Request.RequestUri.Should().BeEquivalentTo(uri);
         if (shouldHaveContent)
         {
-            parsed.Content.Should().NotBeNull();
+            parsed.Request.Content.Should().NotBeNull();
         }
         else
         {
-            parsed.Content.Should().BeNull();
+            parsed.Request.Content.Should().BeNull();
         }
     }
 
-    private static async Task CheckBody(HttpRequestMessage parsed, params string[] shouldContainPhrases)
+    private static async Task CheckBody(RequestExecutionContext parsed, params string[] shouldContainPhrases)
     {
-        var body = await parsed.Content!.ReadAsStringAsync();
+        parsed.Request.Should().NotBeNull();
+        var body = await parsed.Request!.Content!.ReadAsStringAsync();
 
         foreach (var phrase in shouldContainPhrases)
         {

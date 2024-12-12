@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using TeaPie.Http.Headers;
 
 namespace TeaPie.Http;
 
@@ -10,7 +11,8 @@ internal static class Setup
 
         services.AddScoped<IRequestExecutionContextAccessor, RequestExecutionContextAccessor>();
 
-        services.AddSingleton<IHttpFileParser, HttpFileParser>();
+        services.AddSingleton<IHeadersHandler, HeadersHandler>();
+        services.AddSingleton<IHttpRequestParser, HttpRequestParser>();
         services.AddSingleton<IHttpRequestHeadersProvider, HttpRequestHeadersProvider>();
 
         return services;

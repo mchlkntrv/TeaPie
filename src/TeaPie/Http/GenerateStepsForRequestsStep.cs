@@ -39,7 +39,7 @@ internal partial class GenerateStepsForRequestsStep(ITestCaseExecutionContextAcc
         RequestExecutionContext requestExecutionContext;
         foreach (var requestContent in separatedRequests)
         {
-            requestExecutionContext = new(testCaseExecutionContext.TestCase.RequestsFile)
+            requestExecutionContext = new(testCaseExecutionContext.TestCase.RequestsFile, testCaseExecutionContext)
             {
                 RawContent = requestContent
             };
@@ -66,7 +66,7 @@ internal partial class GenerateStepsForRequestsStep(ITestCaseExecutionContextAcc
         var accessor = provider.GetRequiredService<IRequestExecutionContextAccessor>();
         accessor.RequestExecutionContext = requestExecutionContext;
 
-        newSteps.Add(provider.GetStep<ParseRequestFileStep>());
+        newSteps.Add(provider.GetStep<ParseHttpRequestStep>());
         newSteps.Add(provider.GetStep<ExecuteRequestStep>());
     }
 

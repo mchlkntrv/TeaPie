@@ -2,9 +2,30 @@
 
 internal static class HttpFileParserConstants
 {
-    private const string VariableNamePatternBase = "[a-zA-Z0-9-]+";
-    public const string VariableNamePattern = "^" + VariableNamePatternBase + "$";
-    public const string VariableNotationPattern = "{{(" + VariableNamePatternBase + ")}}";
+    private const string SimpleNamePattern = "[a-zA-Z0-9_-]+";
+    private const string StructureVariableNamePatternBase = "[a-zA-Z0-9_.$-]+";
+    public const string VariableNamePattern = "^" + StructureVariableNamePatternBase + "$";
+    public const string VariableNotationPattern = "{{(" + StructureVariableNamePatternBase + ")}}";
+
+    public const string HeaderNamePattern = "^[A-Za-z0-9!#$%&'*+.^_`|~-]+$";
+    public const string HeaderValuePattern = @"^[\t\x20-\x7E\x80-\xFF]*$";
+
+    public const string RequestNameMetadataGroupName = "name";
+    public const string RequestNameMetadataPattern =
+        @"@name\s+(?<" + RequestNameMetadataGroupName + ">" + SimpleNamePattern + ")";
+
+    public const string RequestVariableSeparator = ".";
+    public const string RequestSelector = "request";
+    public const string ResponseSelector = "response";
+    public const string BodySelector = "body";
+    public const string HeadersSelector = "headers";
+    public const string WholeBodySelector = "*";
+
+    public const string RequestVariablePattern =
+        "^" + SimpleNamePattern + @"\" + RequestVariableSeparator +
+        "(" + RequestSelector + "|" + ResponseSelector + @")\" + RequestVariableSeparator +
+        "(" + BodySelector + "|" + HeadersSelector + @")\" + RequestVariableSeparator +
+        @"(\*|(\$[^\s]+)|([A-Za-z0-9!#$%&'*+.^_`|~-]+(\.[A-Za-z0-9!#$%&'*+.^_`|~-]+)*)|)";
 
     public const string HttpHeaderSeparator = ":";
     public const string HttpCommentPrefix = "# ";
@@ -32,4 +53,17 @@ internal static class HttpFileParserConstants
             { HttpOptionsMethodDirective, HttpMethod.Options },
             { HttpTraceMethodDirective, HttpMethod.Trace }
         };
+
+    public static readonly List<string> SpecialHeaders =
+        [
+            "Content-Type",
+            "Content-Disposition",
+            "Content-Encoding",
+            "Content-Language",
+            "Expect",
+            "Authorization",
+            "User-Agent",
+            "Date",
+            "Connection"
+        ];
 }

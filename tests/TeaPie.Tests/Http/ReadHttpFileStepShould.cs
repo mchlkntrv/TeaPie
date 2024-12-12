@@ -1,6 +1,4 @@
 ﻿using FluentAssertions;
-using Microsoft.Extensions.Logging;
-using NSubstitute;
 using TeaPie.Http;
 using TeaPie.TestCases;
 
@@ -13,10 +11,9 @@ public class ReadHttpFileStepShould
     {
         var context = RequestHelper.PrepareTestCaseContext($"{Guid.NewGuid()}{Constants.RequestFileExtension}", false);
 
-        var appContext = new ApplicationContext(
-            RequestsIndex.RootFolderFullPath,
-            Substitute.For<ILogger>(),
-            Substitute.For<IServiceProvider>());
+        var appContext = new ApplicationContextBuilder()
+            .WithPath(RequestsIndex.RootFolderFullPath)
+            .Build();
 
         var accessor = new TestCaseExecutionContextAccessor() { TestCaseExecutionContext = context };
         var step = new ReadHttpFileStep(accessor);
@@ -27,19 +24,18 @@ public class ReadHttpFileStepShould
     [Fact]
     public async Task AssignRawContentOfRequestFileCorrectly()
     {
-        var context = RequestHelper.PrepareTestCaseContext(RequestsIndex.RequestWithCommentsBodyAndHeadersPath, false);
+        var context = RequestHelper.PrepareTestCaseContext(RequestsIndex.RequestWithFullStructure, false);
 
-        var appContext = new ApplicationContext(
-            RequestsIndex.RootFolderFullPath,
-            Substitute.For<ILogger>(),
-            Substitute.For<IServiceProvider>());
+        var appContext = new ApplicationContextBuilder()
+            .WithPath(RequestsIndex.RootFolderFullPath)
+            .Build();
 
         var accessor = new TestCaseExecutionContextAccessor() { TestCaseExecutionContext = context };
         var step = new ReadHttpFileStep(accessor);
 
         await step.Execute(appContext);
 
-        var expectedContent = await File.ReadAllTextAsync(RequestsIndex.RequestWithCommentsBodyAndHeadersPath);
+        var expectedContent = await File.ReadAllTextAsync(RequestsIndex.RequestWithFullStructure);
 
         context.RequestsFileContent.Should().Be(expectedContent);
     }

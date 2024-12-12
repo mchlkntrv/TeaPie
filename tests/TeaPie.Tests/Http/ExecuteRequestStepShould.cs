@@ -1,9 +1,9 @@
 ﻿using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using NSubstitute;
 using System.Net;
 using TeaPie.Http;
+using TeaPie.Http.Headers;
+using TeaPie.TestCases;
 using TeaPie.Variables;
 
 namespace TeaPie.Tests.Http;
@@ -21,12 +21,11 @@ public class ExecuteRequestStepShould
     {
         var serviceProvider = ConfigureServicesAndGetProvider();
 
-        var context = RequestHelper.PrepareRequestContext(RequestsIndex.RequestWithCommentsBodyAndHeadersPath);
+        var context = RequestHelper.PrepareRequestContext(RequestsIndex.RequestWithFullStructure);
 
-        var appContext = new ApplicationContext(
-            RequestsIndex.RootFolderFullPath,
-            Substitute.For<ILogger>(),
-            Substitute.For<IServiceProvider>());
+        var appContext = new ApplicationContextBuilder()
+            .WithPath(RequestsIndex.RootFolderFullPath)
+            .Build();
 
         var accessor = new RequestExecutionContextAccessor() { RequestExecutionContext = context };
 
@@ -40,17 +39,16 @@ public class ExecuteRequestStepShould
     {
         var serviceProvider = ConfigureServicesAndGetProvider();
 
-        var context = RequestHelper.PrepareRequestContext(RequestsIndex.RequestWithCommentsBodyAndHeadersPath);
+        var context = RequestHelper.PrepareRequestContext(RequestsIndex.RequestWithFullStructure);
 
-        var appContext = new ApplicationContext(
-            RequestsIndex.RootFolderFullPath,
-            Substitute.For<ILogger>(),
-            Substitute.For<IServiceProvider>());
+        var appContext = new ApplicationContextBuilder()
+            .WithPath(RequestsIndex.RootFolderFullPath)
+            .Build();
 
         var accessor = new RequestExecutionContextAccessor() { RequestExecutionContext = context };
 
         var parser = CreateParser(serviceProvider);
-        context.Request = parser.Parse(context.RawContent!);
+        parser.Parse(context);
 
         var step = new ExecuteRequestStep(serviceProvider.GetRequiredService<IHttpClientFactory>(), accessor);
 
@@ -66,6 +64,35 @@ public class ExecuteRequestStepShould
 
         context.Response.RequestMessage.Should().NotBeNull();
         context.Response!.RequestMessage!.RequestUri.Should().BeEquivalentTo(new Uri(Path));
+    }
+
+    [Fact]
+    public async Task AddResponseOfNamedRequestToParentTestCaseResponses()
+    {
+        const string RequestName = "FullyStructuredRequest";
+        var serviceProvider = ConfigureServicesAndGetProvider();
+
+        var testCaseContext = new TestCaseExecutionContext(null!);
+        var context = RequestHelper.PrepareRequestContext(RequestsIndex.RequestWithFullStructure);
+        context.TestCaseExecutionContext = testCaseContext;
+
+        var appContext = new ApplicationContextBuilder()
+            .WithPath(RequestsIndex.RootFolderFullPath)
+            .Build();
+
+        appContext.CurrentTestCase = testCaseContext;
+
+        var accessor = new RequestExecutionContextAccessor() { RequestExecutionContext = context };
+
+        var parser = CreateParser(serviceProvider);
+        parser.Parse(context);
+
+        var step = new ExecuteRequestStep(serviceProvider.GetRequiredService<IHttpClientFactory>(), accessor);
+
+        await step.Execute(appContext);
+
+        testCaseContext.Response.Should().Be(context.Response);
+        testCaseContext.Responses.ContainsKey(RequestName).Should().BeTrue();
     }
 
     private static CustomHttpMessageHandler CreateAndConfigureMessageHandler()
@@ -96,14 +123,15 @@ public class ExecuteRequestStepShould
         return services.BuildServiceProvider();
     }
 
-    private static HttpFileParser CreateParser(IServiceProvider serviceProvider)
+    private static HttpRequestParser CreateParser(IServiceProvider serviceProvider)
     {
         var clientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
         var headersProvider = new HttpRequestHeadersProvider(clientFactory);
         var variables = new global::TeaPie.Variables.Variables();
-        var variablesResolver = new VariablesResolver(variables);
+        var variablesResolver = new VariablesResolver(variables, serviceProvider);
+        var headersResolver = new HeadersHandler();
 
-        return new HttpFileParser(headersProvider, variablesResolver);
+        return new HttpRequestParser(headersProvider, variablesResolver, headersResolver);
     }
 
     private class CustomHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responseGenerator) : HttpMessageHandler

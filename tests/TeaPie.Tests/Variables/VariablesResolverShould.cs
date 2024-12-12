@@ -1,6 +1,7 @@
 ﻿using FluentAssertions;
 using NSubstitute;
 using System.Text;
+using TeaPie.Http;
 using TeaPie.Variables;
 
 namespace TeaPie.Tests.Variables;
@@ -13,30 +14,33 @@ public class VariablesResolverShould
     public void ReturnSameLineIfLineDoesntContainAnyVariableNotation()
     {
         const string line = "Console.Writeline(\"Hello World!\");";
-        var resolver = new VariablesResolver(Substitute.For<IVariables>());
+        var resolver = new VariablesResolver(Substitute.For<IVariables>(), Substitute.For<IServiceProvider>());
+        var context = GetRequestExecutionContextMock();
 
-        resolver.ResolveVariablesInLine(line).Should().BeEquivalentTo(line);
+        resolver.ResolveVariablesInLine(line, context).Should().BeEquivalentTo(line);
     }
 
     [Fact]
     public void ReturnSameLineIfVariableNameViolatesNamingConventions()
     {
-        const string invalidVariableName = "My.Variable";
+        const string invalidVariableName = "My<Variable>";
         var line = "Console.Writeline(" + GetVariableNotation(invalidVariableName) + ");";
+        var context = GetRequestExecutionContextMock();
 
-        var resolver = new VariablesResolver(Substitute.For<IVariables>());
+        var resolver = new VariablesResolver(Substitute.For<IVariables>(), Substitute.For<IServiceProvider>());
 
-        resolver.ResolveVariablesInLine(line).Should().BeEquivalentTo(line);
+        resolver.ResolveVariablesInLine(line, context).Should().BeEquivalentTo(line);
     }
 
     [Fact]
     public void ThrowProperExceptionWhenAttemptingToResolveNonExistingVariable()
     {
         var line = "Console.Writeline(" + GetVariableNotation(VariableName) + ");";
+        var context = GetRequestExecutionContextMock();
 
-        var resolver = new VariablesResolver(Substitute.For<IVariables>());
+        var resolver = new VariablesResolver(Substitute.For<IVariables>(), Substitute.For<IServiceProvider>());
 
-        resolver.Invoking(r => r.ResolveVariablesInLine(line)).Should().Throw<InvalidOperationException>();
+        resolver.Invoking(r => r.ResolveVariablesInLine(line, context)).Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
@@ -47,10 +51,11 @@ public class VariablesResolverShould
         const string resolvedLine = "Console.Writeline(" + variableValue + ");";
 
         var variables = new global::TeaPie.Variables.Variables();
-        var resolver = new VariablesResolver(variables);
+        var resolver = new VariablesResolver(variables, Substitute.For<IServiceProvider>());
+        var context = GetRequestExecutionContextMock();
 
         variables.SetVariable(VariableName, variableValue);
-        resolver.ResolveVariablesInLine(line).Should().BeEquivalentTo(resolvedLine);
+        resolver.ResolveVariablesInLine(line, context).Should().BeEquivalentTo(resolvedLine);
     }
 
     [Fact]
@@ -61,10 +66,11 @@ public class VariablesResolverShould
         var resolvedLine = "Console.Writeline(" + variableValue + ");";
 
         var variables = new global::TeaPie.Variables.Variables();
-        var resolver = new VariablesResolver(variables);
+        var resolver = new VariablesResolver(variables, Substitute.For<IServiceProvider>());
+        var context = GetRequestExecutionContextMock();
 
         variables.SetVariable(VariableName, variableValue);
-        resolver.ResolveVariablesInLine(line).Should().BeEquivalentTo(resolvedLine);
+        resolver.ResolveVariablesInLine(line, context).Should().BeEquivalentTo(resolvedLine);
     }
 
     [Fact]
@@ -75,10 +81,11 @@ public class VariablesResolverShould
         const string resolvedLine = "Console.Writeline(null);";
 
         var variables = new global::TeaPie.Variables.Variables();
-        var resolver = new VariablesResolver(variables);
+        var resolver = new VariablesResolver(variables, Substitute.For<IServiceProvider>());
+        var context = GetRequestExecutionContextMock();
 
         variables.SetVariable(VariableName, variableValue);
-        resolver.ResolveVariablesInLine(line).Should().BeEquivalentTo(resolvedLine);
+        resolver.ResolveVariablesInLine(line, context).Should().BeEquivalentTo(resolvedLine);
     }
 
     [Fact]
@@ -91,7 +98,8 @@ public class VariablesResolverShould
         var variablesValues = new string[count];
 
         var variables = new global::TeaPie.Variables.Variables();
-        var resolver = new VariablesResolver(variables);
+        var resolver = new VariablesResolver(variables, Substitute.For<IServiceProvider>());
+        var context = GetRequestExecutionContextMock();
 
         for (var i = 0; i < count; i++)
         {
@@ -106,8 +114,10 @@ public class VariablesResolverShould
             variables.SetVariable(variablesNames[i], variablesValues[i]);
         }
 
-        resolver.ResolveVariablesInLine(lineBuilder.ToString()).Should().BeEquivalentTo(resolvedLineBuilder.ToString());
+        resolver.ResolveVariablesInLine(lineBuilder.ToString(), context).Should().BeEquivalentTo(resolvedLineBuilder.ToString());
     }
+
+    private static RequestExecutionContext GetRequestExecutionContextMock() => new(null!, null);
 
     private static string GetVariableNotation(string variableName) => "{{" + variableName + "}}";
 
