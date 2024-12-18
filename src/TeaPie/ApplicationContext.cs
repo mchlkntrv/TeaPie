@@ -6,9 +6,9 @@ namespace TeaPie;
 
 internal class ApplicationContext(
     string path,
-    ILogger logger,
     IServiceProvider serviceProvider,
-    TeaPie userContext,
+    ICurrentTestCaseExecutionContextAccessor currentTestCaseExecutionContextAccessor,
+    ILogger logger,
     string tempFolder = "")
 {
     public string Path { get; } = path;
@@ -21,16 +21,12 @@ internal class ApplicationContext(
 
     public IServiceProvider ServiceProvider { get; } = serviceProvider;
 
-    public TeaPie UserContext { get; init; } = userContext;
+    private readonly ICurrentTestCaseExecutionContextAccessor _currentTestCaseExecutionContextAccessor =
+        currentTestCaseExecutionContextAccessor;
 
-    private TestCaseExecutionContext? _currentTestCase;
     public TestCaseExecutionContext? CurrentTestCase
     {
-        get => _currentTestCase;
-        set
-        {
-            _currentTestCase = value;
-            UserContext._currentTestCaseExecutionContext = value;
-        }
+        get => _currentTestCaseExecutionContextAccessor.CurrentTestCaseExecutionContext;
+        set => _currentTestCaseExecutionContextAccessor.CurrentTestCaseExecutionContext = value;
     }
 }

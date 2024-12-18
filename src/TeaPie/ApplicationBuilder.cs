@@ -3,9 +3,11 @@ using Microsoft.Extensions.Logging;
 using TeaPie.Http;
 using TeaPie.Logging;
 using TeaPie.Pipelines;
+using TeaPie.Reporting;
 using TeaPie.Scripts;
 using TeaPie.StructureExploration;
 using TeaPie.TestCases;
+using TeaPie.Testing;
 using TeaPie.Variables;
 
 namespace TeaPie;
@@ -47,20 +49,22 @@ public sealed class ApplicationBuilder
         ConfigureServices();
         var provider = _services.BuildServiceProvider();
 
-        var userContext = CreateUserContext(provider);
+        CreateUserContext(provider);
 
-        var applicationContext =
-            new ApplicationContext(
-                _path,
-                provider.GetRequiredService<ILogger<ApplicationContext>>(),
-                provider,
-                userContext,
-                _tempPath ?? string.Empty);
+        var applicationContext = GetApplicationContext(provider);
 
         var pipeline = BuildDefaultPipeline(provider);
 
         return new Application(pipeline, applicationContext);
     }
+
+    private ApplicationContext GetApplicationContext(IServiceProvider provider)
+        => new(
+            _path,
+            provider,
+            provider.GetRequiredService<ICurrentTestCaseExecutionContextAccessor>(),
+            provider.GetRequiredService<ILogger<ApplicationContext>>(),
+            _tempPath ?? string.Empty);
 
     private void ConfigureServices()
     {
@@ -69,11 +73,17 @@ public sealed class ApplicationBuilder
         _services.AddScripts();
         _services.AddHttp();
         _services.AddVariables();
+        _services.AddTesting();
+        _services.AddReporting();
         _services.AddPipelines();
     }
 
     private static TeaPie CreateUserContext(IServiceProvider provider)
-        => TeaPie.Create(provider.GetRequiredService<IVariables>(), provider.GetRequiredService<ILogger<TeaPie>>());
+        => TeaPie.Create(
+            provider.GetRequiredService<IVariables>(),
+            provider.GetRequiredService<ILogger<TeaPie>>(),
+            provider.GetRequiredService<ITester>(),
+            provider.GetRequiredService<ICurrentTestCaseExecutionContextAccessor>());
 
     // TODO: This should be part of some pipeline builder/factory class
     private static ApplicationPipeline BuildDefaultPipeline(IServiceProvider provider)

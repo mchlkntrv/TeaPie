@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using NSubstitute;
-using TeaPie.Variables;
+using TeaPie.TestCases;
 
 namespace TeaPie.Tests;
 
@@ -10,23 +10,11 @@ internal class ApplicationContextBuilder
     private static string? _tempFolderPath;
     private static ILogger? _logger;
     private static IServiceProvider? _serviceProvider;
-    private static TeaPie? _userContext;
+    private static ICurrentTestCaseExecutionContextAccessor? _currentTestCaseExecutionContextAccessor;
 
     public ApplicationContextBuilder WithPath(string path)
     {
         _path = path;
-        return this;
-    }
-
-    public ApplicationContextBuilder WithTempFolderPath(string tempFolderPath)
-    {
-        _tempFolderPath = tempFolderPath;
-        return this;
-    }
-
-    public ApplicationContextBuilder WithLogger(ILogger logger)
-    {
-        _logger = logger;
         return this;
     }
 
@@ -36,17 +24,30 @@ internal class ApplicationContextBuilder
         return this;
     }
 
-    public ApplicationContextBuilder WithUserContext(TeaPie userContext)
+    public ApplicationContextBuilder WithLogger(ILogger logger)
     {
-        _userContext = userContext;
+        _logger = logger;
+        return this;
+    }
+
+    public ApplicationContextBuilder WithTempFolderPath(string tempFolderPath)
+    {
+        _tempFolderPath = tempFolderPath;
+        return this;
+    }
+
+    public ApplicationContextBuilder WithCurrentTestCaseExecutionContextAccessor(
+        ICurrentTestCaseExecutionContextAccessor currentTestCaseExecutionContextAccessor)
+    {
+        _currentTestCaseExecutionContextAccessor = currentTestCaseExecutionContextAccessor;
         return this;
     }
 
     public ApplicationContext Build()
         => new(
             _path ?? string.Empty,
-            _logger ?? Substitute.For<ILogger>(),
             _serviceProvider ?? Substitute.For<IServiceProvider>(),
-            _userContext ?? TeaPie.Create(Substitute.For<IVariables>(), Substitute.For<ILogger>()),
+            _currentTestCaseExecutionContextAccessor ?? Substitute.For<ICurrentTestCaseExecutionContextAccessor>(),
+            _logger ?? Substitute.For<ILogger>(),
             _tempFolderPath ?? string.Empty);
 }
