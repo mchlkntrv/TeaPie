@@ -1,6 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using TeaPie.Http;
+﻿using Microsoft.Extensions.Logging;
 using TeaPie.Pipelines;
 using TeaPie.Scripts;
 using Script = TeaPie.StructureExploration.Script;
@@ -14,8 +12,7 @@ internal class InitializeTestCaseStep(ITestCaseExecutionContextAccessor accessor
 
     public async Task Execute(ApplicationContext context, CancellationToken cancellationToken = default)
     {
-        var testCaseExecutionContext = _testCaseExecutionContextAccessor.TestCaseExecutionContext
-            ?? throw new NullReferenceException("Test case's execution context is null.");
+        ValidateContext(out var testCaseExecutionContext);
 
         context.CurrentTestCase = testCaseExecutionContext;
         AddSteps(context, testCaseExecutionContext);
@@ -44,7 +41,7 @@ internal class InitializeTestCaseStep(ITestCaseExecutionContextAccessor accessor
         => AddStepsForScripts(
             context,
             testCaseExecutionContext.TestCase.PreRequestScripts,
-            testCaseExecutionContext.PreRequestScripts,
+            testCaseExecutionContext.RegisterPreRequestScript,
             newSteps);
 
     private static void AddStepsForPostResponseScripts(
@@ -54,18 +51,18 @@ internal class InitializeTestCaseStep(ITestCaseExecutionContextAccessor accessor
         => AddStepsForScripts(
             context,
             testCaseExecutionContext.TestCase.PostResponseScripts,
-            testCaseExecutionContext.PostResponseScripts,
+            testCaseExecutionContext.RegisterPostResponseScript,
             newSteps);
 
     private static void AddStepsForScripts(
         ApplicationContext context,
         IEnumerable<Script> scriptsCollection,
-        Dictionary<string, ScriptExecutionContext> scriptsCollectionInContext,
+        Action<string, ScriptExecutionContext> addToCollection,
         List<IPipelineStep> newSteps)
     {
         foreach (var script in scriptsCollection)
         {
-            scriptsCollectionInContext.Add(script.File.Path, new(script));
+            addToCollection(script.File.Path, new(script));
             AddStepsForScript(context, script, newSteps);
         }
     }
@@ -73,32 +70,20 @@ internal class InitializeTestCaseStep(ITestCaseExecutionContextAccessor accessor
     private static void AddStepsForScript(ApplicationContext context, Script script, List<IPipelineStep> newSteps)
     {
         var scriptExecutionContext = new ScriptExecutionContext(script);
+        var steps =
+            ScriptStepsFactory.CreateStepsForScriptPreProcessAndExecution(context.ServiceProvider, scriptExecutionContext);
 
-        using var scope = context.ServiceProvider.CreateScope();
-        var provider = scope.ServiceProvider;
-
-        var accessor = provider.GetRequiredService<IScriptExecutionContextAccessor>();
-        accessor.ScriptExecutionContext = scriptExecutionContext;
-
-        newSteps.Add(provider.GetStep<ReadScriptFileStep>());
-        newSteps.Add(provider.GetStep<PreProcessScriptStep>());
-        newSteps.Add(provider.GetStep<SaveTempScriptStep>());
-        newSteps.Add(provider.GetStep<CompileScriptStep>());
-        newSteps.Add(provider.GetStep<ExecuteScriptStep>());
+        newSteps.AddRange(steps);
     }
 
     private static void AddStepsForRequests(
         ApplicationContext context,
         TestCaseExecutionContext testCaseExecutionContext,
         List<IPipelineStep> newSteps)
-    {
-        using var scope = context.ServiceProvider.CreateScope();
-        var provider = scope.ServiceProvider;
+        => newSteps.AddRange(
+            TestCaseStepsFactory.CreateStepsForRequestsWithinTestCase(context.ServiceProvider, testCaseExecutionContext));
 
-        var accessor = provider.GetRequiredService<ITestCaseExecutionContextAccessor>();
-        accessor.TestCaseExecutionContext = testCaseExecutionContext;
-
-        newSteps.Add(provider.GetStep<ReadHttpFileStep>());
-        newSteps.Add(provider.GetStep<GenerateStepsForRequestsStep>());
-    }
+    private void ValidateContext(out TestCaseExecutionContext testCaseExecutionContext)
+        => ExecutionContextValidator.Validate(
+            _testCaseExecutionContextAccessor, out testCaseExecutionContext, "initialize test case");
 }

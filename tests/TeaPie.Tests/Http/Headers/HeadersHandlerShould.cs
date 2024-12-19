@@ -6,12 +6,12 @@ using TeaPie.Http.Headers;
 
 namespace TeaPie.Tests.Http.Headers;
 
-public class HeadersHandlerTests
+public class HeadersHandlerShould
 {
     private readonly HeadersHandler _headersHandler;
     private readonly HttpRequestHeaders _defaultHeaders;
 
-    public HeadersHandlerTests()
+    public HeadersHandlerShould()
     {
         _headersHandler = new HeadersHandler();
         _defaultHeaders = new HttpClient().DefaultRequestHeaders;
@@ -21,8 +21,8 @@ public class HeadersHandlerTests
     public void SetNormalHeadersCorrectly()
     {
         var parsingContext = new HttpParsingContext(_defaultHeaders);
-        parsingContext.Headers.Add("X-Custom-Header", "CustomValue");
-        parsingContext.Headers.Add("Cache-Control", "no-cache");
+        parsingContext.AddHeader("X-Custom-Header", "CustomValue");
+        parsingContext.AddHeader("Cache-Control", "no-cache");
 
         var requestMessage = new HttpRequestMessage();
 
@@ -37,8 +37,8 @@ public class HeadersHandlerTests
     public void SetSpecialHeadersCorrectly()
     {
         var parsingContext = new HttpParsingContext(_defaultHeaders);
-        parsingContext.SpecialHeaders.Add("Content-Type", "application/json");
-        parsingContext.SpecialHeaders.Add("Authorization", "Bearer my-token");
+        parsingContext.AddHeader("Content-Type", "application/json");
+        parsingContext.AddHeader("Authorization", "Bearer my-token");
 
         var requestMessage = new HttpRequestMessage
         {
@@ -93,7 +93,7 @@ public class HeadersHandlerTests
     public void ThrowExceptionForInvalidNormalHeader()
     {
         var parsingContext = new HttpParsingContext(_defaultHeaders);
-        parsingContext.Headers.Add("Invalid-Header", "\u0001");
+        parsingContext.AddHeader("Invalid-Header", "\u0001");
 
         var requestMessage = new HttpRequestMessage();
 
@@ -105,7 +105,7 @@ public class HeadersHandlerTests
     public void ThrowExceptionForMissingContentForContentSpecificHeader()
     {
         var parsingContext = new HttpParsingContext(_defaultHeaders);
-        parsingContext.SpecialHeaders.Add("Content-Type", "application/json");
+        parsingContext.AddHeader("Content-Type", "application/json");
 
         var requestMessage = new HttpRequestMessage();
 

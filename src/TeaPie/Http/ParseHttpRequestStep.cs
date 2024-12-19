@@ -10,20 +10,16 @@ internal class ParseHttpRequestStep(IRequestExecutionContextAccessor contextAcce
 
     public async Task Execute(ApplicationContext context, CancellationToken cancellationToken = default)
     {
-        var requestExecutionContext = _requestExecutionContextAccessor.RequestExecutionContext
-            ?? throw new NullReferenceException("Request's execution context is null.");
-
-        if (requestExecutionContext.RawContent is null)
-        {
-            throw new InvalidOperationException("Parsing of the request file can not be done with null content.");
-        }
+        ValidateContext(out var requestExecutionContext);
 
         context.Logger.LogTrace("Parsing of the request on path '{Path}' started.",
             requestExecutionContext.RequestFile.RelativePath);
 
         _parser.Parse(requestExecutionContext);
 
-        UpdateCurrentTestCase(requestExecutionContext);
+        requestExecutionContext.TestCaseExecutionContext?.RegisterRequest(
+            requestExecutionContext.Request!,
+            requestExecutionContext.Name);
 
         context.Logger.LogTrace("Parsing of the request {RequestName} on path '{Path}' finished successfully.",
             requestExecutionContext.Name.Equals(string.Empty) ? string.Empty : $"'{requestExecutionContext.Name}'",
@@ -32,18 +28,11 @@ internal class ParseHttpRequestStep(IRequestExecutionContextAccessor contextAcce
         await Task.CompletedTask;
     }
 
-    private static void UpdateCurrentTestCase(RequestExecutionContext requestExecutionContext)
+    private void ValidateContext(out RequestExecutionContext requestExecutionContext)
     {
-        if (requestExecutionContext.TestCaseExecutionContext is not null)
-        {
-            requestExecutionContext.TestCaseExecutionContext.Request = requestExecutionContext.Request;
-
-            if (!requestExecutionContext.Name.Equals(string.Empty))
-            {
-                requestExecutionContext.TestCaseExecutionContext?.Requests.Add(
-                    requestExecutionContext.Name,
-                    requestExecutionContext.Request!);
-            }
-        }
+        const string activityName = "parse HTTP request";
+        ExecutionContextValidator.Validate(_requestExecutionContextAccessor, out requestExecutionContext, activityName);
+        ExecutionContextValidator.ValidateParameter(
+            requestExecutionContext.RawContent, out _, activityName, "its content");
     }
 }

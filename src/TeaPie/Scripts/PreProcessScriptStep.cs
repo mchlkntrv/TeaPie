@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using TeaPie.Pipelines;
 using TeaPie.StructureExploration;
 
@@ -16,13 +15,7 @@ internal sealed class PreProcessScriptStep(
 
     public async Task Execute(ApplicationContext context, CancellationToken cancellationToken = default)
     {
-        var scriptExecutionContext = _scriptContextAccessor.ScriptExecutionContext
-            ?? throw new NullReferenceException("Script's execution context is null.");
-
-        if (scriptExecutionContext.RawContent is null)
-        {
-            throw new InvalidOperationException("Pre-processing of the script can not be done with null content.");
-        }
+        ValidateContext(out var scriptExecutionContext, out var content);
 
         context.Logger.LogTrace("Pre-process of the script on path '{ScriptPath}' started.",
             scriptExecutionContext.Script.File.RelativePath);
@@ -32,7 +25,7 @@ internal sealed class PreProcessScriptStep(
         scriptExecutionContext.ProcessedContent =
             await _scriptPreProcessor.ProcessScript(
                 scriptExecutionContext.Script.File.Path,
-                scriptExecutionContext.RawContent,
+                content,
                 context.Path,
                 context.TempFolderPath,
                 referencedScriptsPaths);
@@ -49,41 +42,45 @@ internal sealed class PreProcessScriptStep(
         {
             if (!context.UserDefinedScripts.ContainsKey(scriptPath))
             {
-                var relativePath = scriptPath.TrimRootPath(context.Path, true);
-
-                var folder = context.TestCases.Values
-                    .Select(x => x.RequestsFile.ParentFolder)
-                    .FirstOrDefault(x => x.Path == Directory.GetParent(scriptPath)?.FullName)
-                    ?? throw new DirectoryNotFoundException($"One of the directories in the path: {scriptPath} wasn't found");
-
-                var script = new Script(new(scriptPath, relativePath, Path.GetFileName(scriptPath), folder));
-
-                var scriptContext = new ScriptExecutionContext(script);
-
-                var steps = PrepareSteps(context, scriptContext);
-
-                _pipeline.InsertSteps(this, steps);
-
-                context.Logger.LogDebug(
-                    "For the referenced script '{RefScriptPath}', {Count} steps of pre-process were scheduled in the pipeline.",
-                    relativePath,
-                    steps.Length);
-
-                context.UserDefinedScripts.Add(scriptPath, script);
+                InsertStepsForScript(context, scriptPath);
             }
         }
     }
 
-    private static IPipelineStep[] PrepareSteps(ApplicationContext context, ScriptExecutionContext scriptContext)
+    private void InsertStepsForScript(ApplicationContext context, string scriptPath)
     {
-        using var scope = context.ServiceProvider.CreateScope();
-        var provider = scope.ServiceProvider;
+        PrepareSteps(context, scriptPath, out var relativePath, out var script, out var steps);
 
-        var accessor = provider.GetRequiredService<IScriptExecutionContextAccessor>();
-        accessor.ScriptExecutionContext = scriptContext;
+        _pipeline.InsertSteps(this, steps);
 
-        return [provider.GetStep<ReadScriptFileStep>(),
-            provider.GetStep<PreProcessScriptStep>(),
-            provider.GetStep<SaveTempScriptStep>()];
+        context.Logger.LogDebug(
+            "For the referenced script '{RefScriptPath}', {Count} steps of pre-process were scheduled in the pipeline.",
+            relativePath,
+            steps.Length);
+
+        context.RegisterUserDefinedScript(scriptPath, script);
+    }
+
+    private static void PrepareSteps(
+        ApplicationContext context, string scriptPath, out string relativePath, out Script script, out IPipelineStep[] steps)
+    {
+        relativePath = scriptPath.TrimRootPath(context.Path, true);
+        var folder = context.TestCases.Values
+            .Select(x => x.RequestsFile.ParentFolder)
+            .FirstOrDefault(x => x.Path == Directory.GetParent(scriptPath)?.FullName)
+            ?? throw new DirectoryNotFoundException($"One of the directories in the path: {scriptPath} wasn't found");
+
+        script = new Script(new(scriptPath, relativePath, Path.GetFileName(scriptPath), folder));
+        var scriptContext = new ScriptExecutionContext(script);
+
+        steps = ScriptStepsFactory.CreateStepsForScriptPreProcess(context.ServiceProvider, scriptContext);
+    }
+
+    private void ValidateContext(out ScriptExecutionContext scriptExecutionContext, out string content)
+    {
+        const string activityName = "pre-process script";
+        ExecutionContextValidator.Validate(_scriptContextAccessor, out scriptExecutionContext, activityName);
+        ExecutionContextValidator.ValidateParameter(
+            scriptExecutionContext.RawContent, out content, activityName, "its content");
     }
 }

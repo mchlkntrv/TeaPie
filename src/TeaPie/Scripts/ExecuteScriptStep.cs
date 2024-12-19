@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.CodeAnalysis.Scripting;
+using Microsoft.Extensions.Logging;
 using TeaPie.Pipelines;
 
 namespace TeaPie.Scripts;
@@ -9,34 +10,28 @@ internal class ExecuteScriptStep(IScriptExecutionContextAccessor scriptExecution
 
     public async Task Execute(ApplicationContext context, CancellationToken cancellationToken = default)
     {
-        var scriptExecutionContext = _scriptContextAccessor.ScriptExecutionContext
-            ?? throw new NullReferenceException("Script's execution context is null.");
+        ValidateContext(out var scriptExecutionContext, out var script);
 
-        var script = scriptExecutionContext.ScriptObject;
+        await ExecuteScript(context, scriptExecutionContext, script, cancellationToken);
+    }
 
-        ArgumentNullException.ThrowIfNull(script, nameof(script));
+    private static async Task ExecuteScript(
+        ApplicationContext context,
+        ScriptExecutionContext scriptExecutionContext,
+        Script<object> script,
+        CancellationToken cancellationToken)
+    {
+        context.Logger.LogTrace("Execution of the {ScriptType} on path '{RelativePath}' started.",
+            GetTypeOfScript(scriptExecutionContext),
+            scriptExecutionContext.Script.File.RelativePath);
 
-        try
-        {
-            context.Logger.LogTrace("Execution of the {ScriptType} on path '{RelativePath}' started.",
-                GetTypeOfScript(scriptExecutionContext),
-                scriptExecutionContext.Script.File.RelativePath);
+        await script.RunAsync(
+            globals: new Globals() { tp = TeaPie.Instance },
+            cancellationToken: cancellationToken);
 
-            await script.RunAsync(
-                globals: new Globals() { tp = TeaPie.Instance },
-                cancellationToken: cancellationToken);
-
-            context.Logger.LogTrace("Execution of the {ScriptType} on path '{RelativePath}' finished.",
-                GetTypeOfScript(scriptExecutionContext),
-                scriptExecutionContext.Script.File.RelativePath);
-        }
-        catch (Exception ex)
-        {
-            context.Logger.LogError("Error occured during execution of the script on path '{RelativePath}'. Cause: {Cause}.",
-                scriptExecutionContext.Script.File.RelativePath, ex.Message);
-
-            throw;
-        }
+        context.Logger.LogTrace("Execution of the {ScriptType} on path '{RelativePath}' finished.",
+            GetTypeOfScript(scriptExecutionContext),
+            scriptExecutionContext.Script.File.RelativePath);
     }
 
     private static string GetTypeOfScript(ScriptExecutionContext scriptExecutionContext)
@@ -53,5 +48,13 @@ internal class ExecuteScriptStep(IScriptExecutionContextAccessor scriptExecution
             var p when p.EndsWith($"{Constants.PostResponseSuffix}{Constants.ScriptFileExtension}") => "Post-Response script",
             _ => "User-defined script"
         };
+    }
+
+    private void ValidateContext(out ScriptExecutionContext scriptExecutionContext, out Script<object> script)
+    {
+        const string activityName = "execute script";
+        ExecutionContextValidator.Validate(_scriptContextAccessor, out scriptExecutionContext, activityName);
+        ExecutionContextValidator.ValidateParameter(
+            scriptExecutionContext.ScriptObject, out script, activityName, "its script object");
     }
 }

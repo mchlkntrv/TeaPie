@@ -15,7 +15,10 @@ internal class ApplicationContext(
     public string TempFolderPath { get; set; } = tempFolder;
 
     public IReadOnlyDictionary<string, TestCase> TestCases { get; set; } = new Dictionary<string, TestCase>();
-    public Dictionary<string, Script> UserDefinedScripts { get; set; } = [];
+
+    private readonly Dictionary<string, Script> _userDefinedScripts = [];
+    public IReadOnlyDictionary<string, Script> UserDefinedScripts => _userDefinedScripts;
+    public void RegisterUserDefinedScript(string key, Script script) => _userDefinedScripts.Add(key, script);
 
     public ILogger Logger { get; set; } = logger;
 
@@ -26,7 +29,7 @@ internal class ApplicationContext(
 
     public TestCaseExecutionContext? CurrentTestCase
     {
-        get => _currentTestCaseExecutionContextAccessor.CurrentTestCaseExecutionContext;
-        set => _currentTestCaseExecutionContextAccessor.CurrentTestCaseExecutionContext = value;
+        get => _currentTestCaseExecutionContextAccessor.Context;
+        set => _currentTestCaseExecutionContextAccessor.Context = value;
     }
 }

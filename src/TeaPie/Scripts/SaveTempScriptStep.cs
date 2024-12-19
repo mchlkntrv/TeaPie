@@ -5,22 +5,29 @@ namespace TeaPie.Scripts;
 
 internal sealed class SaveTempScriptStep(IScriptExecutionContextAccessor accessor) : IPipelineStep
 {
-    private readonly IScriptExecutionContextAccessor _accessor = accessor;
+    private readonly IScriptExecutionContextAccessor _scriptContextAccessor = accessor;
 
     public async Task Execute(ApplicationContext context, CancellationToken cancellationToken = default)
     {
-        var scriptExecution = _accessor.ScriptExecutionContext ??
-            throw new NullReferenceException("Script's execution context is null.");
+        ValidateContext(out var scriptExecutionContext, out var content);
 
-        if (scriptExecution.ProcessedContent is null)
-        {
-            throw new InvalidOperationException(
-                "Processed content of the script can not be null when storing to temporary script file.");
-        }
+        var temporaryPath = await SaveTemporaryScript(context, scriptExecutionContext, content, cancellationToken);
 
-        var tmpPath = Path.Combine(context.TempFolderPath, scriptExecution.Script.File.RelativePath);
+        context.Logger.LogTrace(
+            "Pre-processed script from path '{ScriptPath}' was saved to temporary folder, on path '{TempPath}'",
+            scriptExecutionContext.Script.File.RelativePath,
+            temporaryPath);
+    }
 
-        var parent = Directory.GetParent(tmpPath);
+    private static async Task<string> SaveTemporaryScript(
+        ApplicationContext context,
+        ScriptExecutionContext scriptExecution,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        var temporaryPath = Path.Combine(context.TempFolderPath, scriptExecution.Script.File.RelativePath);
+
+        var parent = Directory.GetParent(temporaryPath);
         ArgumentNullException.ThrowIfNull(parent);
 
         if (!Directory.Exists(parent.FullName))
@@ -28,13 +35,17 @@ internal sealed class SaveTempScriptStep(IScriptExecutionContextAccessor accesso
             Directory.CreateDirectory(parent.FullName);
         }
 
-        await File.WriteAllTextAsync(tmpPath, scriptExecution.ProcessedContent, cancellationToken);
+        await File.WriteAllTextAsync(temporaryPath, content, cancellationToken);
 
-        scriptExecution.TemporaryPath = tmpPath;
+        scriptExecution.TemporaryPath = temporaryPath;
+        return temporaryPath;
+    }
 
-        context.Logger.LogTrace("Pre-processed script from path '{ScriptPath}' was saved to temporary folder," +
-            " on path '{TempPath}'",
-            scriptExecution.Script.File.RelativePath,
-            tmpPath);
+    private void ValidateContext(out ScriptExecutionContext scriptExecutionContext, out string content)
+    {
+        const string activityName = "save temporary script";
+        ExecutionContextValidator.Validate(_scriptContextAccessor, out scriptExecutionContext, activityName);
+        ExecutionContextValidator.ValidateParameter(
+            scriptExecutionContext.ProcessedContent, out content, activityName, "its processed content");
     }
 }

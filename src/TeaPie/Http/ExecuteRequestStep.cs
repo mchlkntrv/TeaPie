@@ -11,17 +11,12 @@ internal class ExecuteRequestStep(IHttpClientFactory clientFactory, IRequestExec
 
     public async Task Execute(ApplicationContext context, CancellationToken cancellationToken = default)
     {
-        var requestExecutionContext = _requestExecutionContextAccessor.RequestExecutionContext
-            ?? throw new NullReferenceException("Request's execution context is null.");
-
-        var request = requestExecutionContext.Request ??
-            throw new InvalidOperationException("Unable to execute request if request message is null.");
+        ValidateContext(out var requestExecutionContext, out var request);
 
         var response = await ExecuteRequest(context, request, cancellationToken);
 
         requestExecutionContext.Response = response;
-
-        UpdateCurrentTestCase(context, requestExecutionContext, response);
+        requestExecutionContext.TestCaseExecutionContext?.RegisterResponse(response, requestExecutionContext.Name);
     }
 
     private async Task<HttpResponseMessage> ExecuteRequest(
@@ -40,19 +35,11 @@ internal class ExecuteRequestStep(IHttpClientFactory clientFactory, IRequestExec
         return response;
     }
 
-    private static void UpdateCurrentTestCase(
-        ApplicationContext context,
-        RequestExecutionContext requestExecutionContext,
-        HttpResponseMessage response)
+    private void ValidateContext(out RequestExecutionContext requestExecutionContext, out HttpRequestMessage request)
     {
-        if (context.CurrentTestCase is not null)
-        {
-            context.CurrentTestCase.Response = response;
-
-            if (!requestExecutionContext.Name.Equals(string.Empty))
-            {
-                context.CurrentTestCase.Responses.Add(requestExecutionContext.Name, response);
-            }
-        }
+        const string activityName = "execute request";
+        ExecutionContextValidator.Validate(_requestExecutionContextAccessor, out requestExecutionContext, activityName);
+        ExecutionContextValidator.ValidateParameter(
+            requestExecutionContext.Request, out request, activityName, "request message");
     }
 }

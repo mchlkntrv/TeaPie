@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
 using TeaPie.Pipelines;
+using TeaPie.StructureExploration;
 using TeaPie.TestCases;
+using File = System.IO.File;
 
 namespace TeaPie.Http;
 
@@ -10,26 +12,27 @@ internal sealed class ReadHttpFileStep(ITestCaseExecutionContextAccessor testCas
 
     public async Task Execute(ApplicationContext context, CancellationToken cancellationToken = default)
     {
-        var testCaseExecutionContext = _testCaseContextAccessor.TestCaseExecutionContext
-            ?? throw new NullReferenceException("Test case's execution context is null.");
+        ValidateContext(out var testCaseExecutionContext, out var testCase);
 
-        var testCase = testCaseExecutionContext.TestCase;
+        await ReadHttpFile(context, testCaseExecutionContext, testCase, cancellationToken);
+    }
 
-        try
-        {
-            testCaseExecutionContext.RequestsFileContent =
-                await File.ReadAllTextAsync(testCase.RequestsFile.Path, cancellationToken);
+    private static async Task ReadHttpFile(
+        ApplicationContext context,
+        TestCaseExecutionContext testCaseExecutionContext,
+        TestCase testCase,
+        CancellationToken cancellationToken)
+    {
+        testCaseExecutionContext.RequestsFileContent =
+            await File.ReadAllTextAsync(testCase.RequestsFile.Path, cancellationToken);
 
-            context.Logger.LogTrace("Content of the requests file on path '{RequestPath}' was read.",
-                testCase.RequestsFile.RelativePath);
-        }
-        catch (Exception ex)
-        {
-            context.Logger.LogError("Reading of the requests file on path '{Path}' failed, because of '{ErrorMessage}'.",
-                testCase.RequestsFile.RelativePath,
-                ex.Message);
+        context.Logger.LogTrace("Content of the requests file on path '{RequestPath}' was read.",
+            testCase.RequestsFile.RelativePath);
+    }
 
-            throw;
-        }
+    private void ValidateContext(out TestCaseExecutionContext testCaseExecutionContext, out TestCase testCase)
+    {
+        ExecutionContextValidator.Validate(_testCaseContextAccessor, out testCaseExecutionContext, "read HTTP file");
+        testCase = testCaseExecutionContext.TestCase;
     }
 }
