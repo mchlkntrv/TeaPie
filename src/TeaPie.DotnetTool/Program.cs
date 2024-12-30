@@ -1,8 +1,16 @@
-﻿using TeaPie;
+﻿using Spectre.Console.Cli;
+using TeaPie.DotnetTool;
 
-var builder = ApplicationBuilder.Create()
-    .WithPath(args[0])
-    .AddLogging();
+var app = new CommandApp();
+app.Configure(config =>
+{
+    config.SetApplicationName("tp");
 
-var app = builder.Build();
-await app.Run(new CancellationToken());
+    config.AddCommand<TestCommand>("test")
+        .WithDescription("Runs tests from the collection at the specified path. " +
+        "If no path is provided, the current directory is used.")
+        .WithExample("test", "[pathToCollection]")
+        .WithExample("test", "\"path\\to\\collection\"");
+});
+
+return await app.RunAsync(args);
