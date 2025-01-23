@@ -1,0 +1,11 @@
+# Comments in .http file can start with either '# ' or '// ' prefix.
+// Variable's string value can be accessed by following notation.
+POST {{ApiBaseUrl}}{{ApiCustomersSection}}
+Content-Type: application/json
+
+{
+    "Id": 3,
+    "FirstName": "Alice",
+    "LastName": "Johnson",
+    "Email": "alice.johnson@example.com"
+}

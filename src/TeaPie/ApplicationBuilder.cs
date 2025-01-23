@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging;
 using TeaPie.Http;
 using TeaPie.Logging;
 using TeaPie.Pipelines;
-using TeaPie.Reporting;
 using TeaPie.Scripts;
 using TeaPie.StructureExploration;
 using TeaPie.TestCases;
@@ -97,7 +96,6 @@ public sealed class ApplicationBuilder
         _services.AddHttp();
         _services.AddVariables();
         _services.AddTesting();
-        _services.AddReporting();
         _services.AddPipelines();
         _services.AddLogging(() => _services.ConfigureLogging(_minimumLogLevel, _pathToLogFile, _minimumLevelForLogFile));
     }

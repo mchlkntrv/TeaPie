@@ -11,6 +11,17 @@ internal static class ScriptsConstants
 
     public const string NuGetApiResourcesUrl = "https://api.nuget.org/v3/index.json";
 
+    public static readonly HashSet<string> SuppressedWarnings =
+    [
+        "CS1701"
+    ];
+
+    public static readonly IEnumerable<NuGetPackageDescription> DefaultNuGetPackages =
+    [
+        new("Microsoft.CSharp", "4.7.0"),
+        new("Xunit.Assert", "2.9.3")
+    ];
+
     public static readonly IEnumerable<string> DefaultImports = [
         "System",
         "System.Collections.Generic",
@@ -20,8 +31,12 @@ internal static class ScriptsConstants
         "System.Threading",
         "System.Threading.Tasks",
         "Microsoft.Extensions.Logging",
+        "Xunit.Assert",
+        "TeaPie.Testing",
         "TeaPie.Variables",
-        "TeaPie.Testing"
+        "TeaPie.Http",
+        "TeaPie.Json",
+        "TeaPie"
     ];
 
     public static readonly string[] FrameworksPriorityList =
