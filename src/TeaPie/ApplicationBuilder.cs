@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using TeaPie.Environments;
 using TeaPie.Http;
 using TeaPie.Logging;
 using TeaPie.Pipelines;
@@ -17,6 +18,9 @@ public sealed class ApplicationBuilder
 
     private string? _path;
     private string? _tempPath;
+
+    private string? _environment;
+    private string? _environmentFilePath;
 
     private LogLevel _minimumLogLevel = LogLevel.None;
     private string _pathToLogFile = string.Empty;
@@ -66,14 +70,26 @@ public sealed class ApplicationBuilder
         return this;
     }
 
+    public ApplicationBuilder WithEnvironment(string environmentName)
+    {
+        _environment = environmentName;
+        return this;
+    }
+
+    public ApplicationBuilder WithEnvironmentFile(string environmentFilePath)
+    {
+        _environmentFilePath = environmentFilePath;
+        return this;
+    }
+
     public Application Build()
     {
         ConfigureServices();
         var provider = _services.BuildServiceProvider();
 
-        CreateUserContext(provider);
-
         var applicationContext = GetApplicationContext(provider);
+
+        CreateUserContext(provider, applicationContext);
 
         var pipeline = BuildDefaultPipeline(provider);
 
@@ -86,11 +102,14 @@ public sealed class ApplicationBuilder
             provider,
             provider.GetRequiredService<ICurrentTestCaseExecutionContextAccessor>(),
             provider.GetRequiredService<ILogger<ApplicationContext>>(),
-            string.IsNullOrEmpty(_tempPath) ? Constants.DefaultTemporaryFolderPath : _tempPath);
+            string.IsNullOrEmpty(_tempPath) ? Constants.DefaultTemporaryFolderPath : _tempPath,
+            string.IsNullOrEmpty(_environment) ? string.Empty : _environment,
+            string.IsNullOrEmpty(_environmentFilePath) ? string.Empty : _environmentFilePath);
 
     private void ConfigureServices()
     {
         _services.AddStructureExploration();
+        _services.AddEnvironments();
         _services.AddTestCases();
         _services.AddScripts();
         _services.AddHttp();
@@ -100,12 +119,14 @@ public sealed class ApplicationBuilder
         _services.AddLogging(() => _services.ConfigureLogging(_minimumLogLevel, _pathToLogFile, _minimumLevelForLogFile));
     }
 
-    private static TeaPie CreateUserContext(IServiceProvider provider)
+    private static TeaPie CreateUserContext(IServiceProvider provider, ApplicationContext applicationContext)
         => TeaPie.Create(
             provider.GetRequiredService<IVariables>(),
             provider.GetRequiredService<ILogger<TeaPie>>(),
             provider.GetRequiredService<ITester>(),
-            provider.GetRequiredService<ICurrentTestCaseExecutionContextAccessor>());
+            provider.GetRequiredService<ICurrentTestCaseExecutionContextAccessor>(),
+            applicationContext,
+            provider.GetRequiredService<IPipeline>());
 
     private ApplicationPipeline BuildDefaultPipeline(IServiceProvider provider)
     {

@@ -1,0 +1,12 @@
+{
+    "$shared": {
+        "ApiBaseUrl": "http://my-car-rental-company.com",
+        "ApiCustomersSection" : "/customers",
+        "ApiCarsSection" : "/cars",
+        "ApiCarRentalSection" : "/rental"
+    },
+    "local": {
+        "ApiBaseUrl": "http://localhost:3001",
+        "DebugMode": true
+    }
+}

@@ -4,22 +4,25 @@ namespace TeaPie.StructureExploration;
 
 internal interface IStructureExplorer
 {
-    IReadOnlyCollectionStructure ExploreCollectionStructure(string rootPath);
+    IReadOnlyCollectionStructure ExploreCollectionStructure(ApplicationContext applicationContext);
 }
 
 internal partial class StructureExplorer(ILogger<StructureExplorer> logger) : IStructureExplorer
 {
     private readonly ILogger<StructureExplorer> _logger = logger;
+    private string? _environmentFileName;
 
-    public IReadOnlyCollectionStructure ExploreCollectionStructure(string rootPath)
+    public IReadOnlyCollectionStructure ExploreCollectionStructure(ApplicationContext applicationContext)
     {
-        CheckArgument(rootPath);
+        CheckArguments(applicationContext);
 
-        LogStartOfCollectionExploration(rootPath);
+        LogStartOfCollectionExploration(applicationContext.Path);
 
-        InitializeStructure(rootPath, out var rootFolder, out var collectionStructure);
+        InitializeStructure(applicationContext.Path, out var rootFolder, out var collectionStructure);
 
-        Explore(rootFolder, collectionStructure);
+        Explore(rootFolder, applicationContext.EnvironmentFilePath, collectionStructure);
+
+        UpdateContext(applicationContext, collectionStructure);
 
         LogEndOfCollectionExploration(collectionStructure.TestCases.Count);
 
@@ -27,18 +30,32 @@ internal partial class StructureExplorer(ILogger<StructureExplorer> logger) : IS
     }
 
     #region Helping methods
-    private static void CheckArgument(string rootPath)
+    private void CheckArguments(ApplicationContext applicationContext)
     {
-        if (string.IsNullOrEmpty(rootPath))
+        if (string.IsNullOrEmpty(applicationContext.Path))
         {
             throw new InvalidOperationException("Unable to explore collection structure, if path is empty or missing.");
         }
 
-        if (!Directory.Exists(rootPath))
+        if (!Directory.Exists(applicationContext.Path))
         {
-            throw new DirectoryNotFoundException($"Provided folder doesn't exist. ({rootPath})");
+            throw new InvalidOperationException($"Unable to explore collection on path '{applicationContext.Path}' " +
+                "because such a collection path doesn't exist.");
+        }
+
+        if (string.IsNullOrEmpty(applicationContext.EnvironmentFilePath))
+        {
+            _environmentFileName = GetEnvironmentFileName(applicationContext.Path);
+        }
+        else if (!System.IO.File.Exists(applicationContext.EnvironmentFilePath))
+        {
+            throw new InvalidOperationException("Specified environment file on path " +
+                $"'{applicationContext.EnvironmentFilePath}' does not exist.");
         }
     }
+
+    private static string GetEnvironmentFileName(string path)
+        => Path.GetFileNameWithoutExtension(path) + Constants.EnvironmentFileSuffix + Constants.EnvironmentFileExtension;
 
     private static void InitializeStructure(string rootPath, out Folder rootFolder, out CollectionStructure collectionStructure)
     {
@@ -46,23 +63,37 @@ internal partial class StructureExplorer(ILogger<StructureExplorer> logger) : IS
         rootFolder = new(rootPath, folderName, folderName, null);
         collectionStructure = new CollectionStructure(rootFolder);
     }
+
+    private static void UpdateContext(ApplicationContext applicationContext, CollectionStructure collectionStructure)
+    {
+        if (collectionStructure.HasEnvironmentFile)
+        {
+            applicationContext.EnvironmentFilePath = collectionStructure.EnvironmentFile.Path;
+        }
+    }
     #endregion
 
     #region Exploration methods
-    private static void Explore(Folder rootFolder, CollectionStructure collectionStructure)
-        => ExploreFolder(rootFolder, collectionStructure);
+    private void Explore(Folder rootFolder, string environmentFilePath, CollectionStructure collectionStructure)
+    {
+        ExploreFolder(rootFolder, collectionStructure);
+        RegisterEnvironmentFileIfNeeded(environmentFilePath, collectionStructure);
+    }
 
     /// <summary>
     /// Recursive depth-first algorithm, which examines file system tree. Whole structure is gradually formed within
     /// <paramref name="collectionStructure"/> parameter in form of folders and test-cases. Each folder can have sub-folders
-    /// and/or test cases. Test-case is represented by '.http' file and possibly by other files (e.g. script '.csx' files).
+    /// and/or test cases. Test-case is represented by <b>'.http'</b> file and possibly by other files
+    /// (e.g. script <b>'.csx'</b> files).
     /// </summary>
     /// <param name="currentFolder">Folder to be explored.</param>
     /// <param name="collectionStructure">List of explored test-cases.</param>
-    private static void ExploreFolder(Folder currentFolder, CollectionStructure collectionStructure)
+    private void ExploreFolder(Folder currentFolder, CollectionStructure collectionStructure)
     {
         var subFolderPaths = GetFolders(currentFolder);
         var files = GetFiles(currentFolder);
+
+        SearchForEnvironmentFileIfNeeded(currentFolder, files, collectionStructure);
 
         foreach (var subFolderPath in subFolderPaths)
         {
@@ -73,10 +104,27 @@ internal partial class StructureExplorer(ILogger<StructureExplorer> logger) : IS
         ExploreTestCases(collectionStructure, currentFolder, files);
     }
 
+    private void SearchForEnvironmentFileIfNeeded(
+        Folder parentFolder,
+        IList<string> files,
+        CollectionStructure collectionStructure)
+    {
+        if (_environmentFileName is not null && !collectionStructure.HasEnvironmentFile)
+        {
+            var envFile = files.FirstOrDefault(
+                f => Path.GetFileName(f).Equals(_environmentFileName, StringComparison.OrdinalIgnoreCase));
+
+            if (envFile is not null)
+            {
+                collectionStructure.SetEnvironmentFile(File.Create(envFile, parentFolder));
+            }
+        }
+    }
+
     private static void ExploreTestCases(
         CollectionStructure collectionStructure,
         Folder currentFolder,
-        IEnumerable<string> files)
+        IList<string> files)
     {
         var preRequestScripts = GetScripts(currentFolder, Constants.PreRequestSuffix, files);
         var postResponseScripts = GetScripts(currentFolder, Constants.PostResponseSuffix, files);
@@ -128,6 +176,21 @@ internal partial class StructureExplorer(ILogger<StructureExplorer> logger) : IS
             .TryGetValue(GetRelatedScriptFileName(fileName, scriptSuffix), out var script)
                 ? [script]
                 : [];
+
+    private void RegisterEnvironmentFileIfNeeded(string environmentFilePath, CollectionStructure collectionStructure)
+    {
+        if (_environmentFileName is null)
+        {
+            if (collectionStructure.TryGetFolder(Path.GetDirectoryName(environmentFilePath) ?? string.Empty, out var folder))
+            {
+                collectionStructure.SetEnvironmentFile(File.Create(environmentFilePath, folder));
+            }
+            else
+            {
+                throw new InvalidOperationException("Unable to set environment file to file outside collection.");
+            }
+        }
+    }
     #endregion
 
     #region Getting methods
@@ -145,13 +208,11 @@ internal partial class StructureExplorer(ILogger<StructureExplorer> logger) : IS
         return new TestCase(requestFileObj);
     }
 
-    private static IOrderedEnumerable<string> GetFiles(Folder currentFolder)
-    => Directory.GetFiles(currentFolder.Path).Order()
-         .OrderBy(path => path, StringComparer.OrdinalIgnoreCase);
+    private static IList<string> GetFiles(Folder currentFolder)
+        => [.. Directory.GetFiles(currentFolder.Path).OrderBy(path => path, StringComparer.OrdinalIgnoreCase)];
 
-    private static IOrderedEnumerable<string> GetFolders(Folder currentFolder)
-        => Directory.GetDirectories(currentFolder.Path)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase);
+    private static IList<string> GetFolders(Folder currentFolder)
+        => [.. Directory.GetDirectories(currentFolder.Path).OrderBy(path => path, StringComparer.OrdinalIgnoreCase)];
 
     private static Dictionary<string, Script> GetScripts(
         Folder folder,
@@ -162,11 +223,7 @@ internal partial class StructureExplorer(ILogger<StructureExplorer> logger) : IS
                 .Select(file =>
                 {
                     var fileName = Path.GetFileName(file);
-                    var script = new Script(new File(
-                        file,
-                        $"{folder.RelativePath}{Path.DirectorySeparatorChar}{fileName}",
-                        fileName,
-                        folder));
+                    var script = new Script(File.Create(file, folder));
 
                     return new KeyValuePair<string, Script>(fileName, script);
                 })

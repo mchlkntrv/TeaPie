@@ -8,9 +8,22 @@ internal class ApplicationContextBuilder
 {
     private static string? _path;
     private static string? _tempFolderPath;
+    private static string? _environmentName;
+    private static string? _environmentFilePath;
     private static ILogger? _logger;
     private static IServiceProvider? _serviceProvider;
     private static ICurrentTestCaseExecutionContextAccessor? _currentTestCaseExecutionContextAccessor;
+
+    public ApplicationContextBuilder()
+    {
+        _path = null;
+        _tempFolderPath = null;
+        _environmentName = null;
+        _environmentFilePath = null;
+        _logger = null;
+        _serviceProvider = null;
+        _currentTestCaseExecutionContextAccessor = null;
+    }
 
     public ApplicationContextBuilder WithPath(string path)
     {
@@ -43,11 +56,25 @@ internal class ApplicationContextBuilder
         return this;
     }
 
+    public ApplicationContextBuilder WithEnvironment(string environmentName)
+    {
+        _environmentName = environmentName;
+        return this;
+    }
+
+    public ApplicationContextBuilder WithEnvironmentFilePath(string environmentFilePath)
+    {
+        _environmentFilePath = environmentFilePath;
+        return this;
+    }
+
     public ApplicationContext Build()
         => new(
             _path ?? string.Empty,
             _serviceProvider ?? Substitute.For<IServiceProvider>(),
             _currentTestCaseExecutionContextAccessor ?? Substitute.For<ICurrentTestCaseExecutionContextAccessor>(),
             _logger ?? Substitute.For<ILogger>(),
-            _tempFolderPath ?? string.Empty);
+            _tempFolderPath ?? string.Empty,
+            _environmentName ?? string.Empty,
+            _environmentFilePath ?? string.Empty);
 }
