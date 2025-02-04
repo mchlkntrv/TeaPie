@@ -1,10 +1,11 @@
 ﻿namespace TeaPie.Reporting;
 
-internal interface IReporter
+public interface IReporter
 {
-    void ReportTestStart(string testName, string path);
+    void Report();
+}
 
-    void ReportTestSuccess(string testName, long duration);
-
-    void ReportTestFailure(string testName, string errorMessage, long duration);
+public interface IReporter<TReportedObject>
+{
+    void Report(TReportedObject report);
 }
