@@ -67,7 +67,7 @@ teapie
 This command **runs all test cases** found in the current folder and its subfolders. For more advanced usage, the full command specification is:
 
 ```sh
-teapie test [path-to-collection] [--temp-path <path-to-temporary-folder>] [-d|--debug] [-v|--verbose] [-q|--quiet] [--log-level <minimal-log-level>] [--log-file <path-to-log-file>] [--log-file-log-level <minimal-log-level-for-log-file>]
+teapie test [path-to-collection] [--temp-path <path-to-temporary-folder>] [-d|--debug] [-v|--verbose] [-q|--quiet] [--log-level <minimal-log-level>] [--log-file <path-to-log-file>] [--log-file-log-level <minimal-log-level-for-log-file>] [-e|--env|--environment <environment-name>] [--env-file|--environment-file <path-to-environment-file>] [-r|--report-file <path-to-report-file>]
 ```
 
 > 💁‍♂️ You can use alias `t` or **completely omit command name**, since `test` command is considered as **default command** when launching `teapie`.
@@ -314,9 +314,27 @@ tp.SetEnvironment("local");
 
 ### Reporting
 
-At the end of a collection testing run, a summary report of test results is generated. Here is an example:
+<!-- omit from toc -->
+#### Console report
+
+At the end of a collection testing run, a summary report of test results is **automatically displayed to console** using `Spectre.Console` components. Here is an example:
 
 ![Report example](./assets/images/report-example.png)
+
+<!-- omit from toc -->
+#### Reporting to File
+
+TeaPie includes a built-in **`JUnit XML` file reporter**, which can be enabled by adding the `-r|--report-file` **option** with a valid path to an `.xml` file where the report will be generated.
+
+This **widely accepted format** is supported natively by **GitHub Actions** and **Microsoft Azure DevOps**. However, it is not fully standardized, and different CI tools may use modified versions of this format. For more details, refer to this [post](https://github.com/testmoapp/junitxml).
+
+Since `JUnit XML` uses **different terminology** than `TeaPie`, here is the mapping:
+
+- **`testsuites`** → **Collection**
+- **`testsuite`** → **Test Case**
+- **`testcase`** → **Test**
+
+Time is automatically converted to **seconds** (a common practice) with **three decimal places**, using **dot notation**.
 
 <!-- omit from toc -->
 #### Custom Reporters

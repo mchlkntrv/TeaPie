@@ -1,5 +1,6 @@
 ﻿using NSubstitute;
 using TeaPie.Reporting;
+using TeaPie.Testing;
 using static Xunit.Assert;
 using TestResult = TeaPie.Testing.TestResult;
 
@@ -10,7 +11,8 @@ public partial class TestResultsSummaryReporterShould
     [Fact]
     public void NotTriggerReportMethodOnUnregisteredReporter()
     {
-        var compositeReporter = new TestResultsSummaryReporter();
+        var accessor = new TestResultsSummaryAccessor() { Summary = new() };
+        var compositeReporter = new CollectionTestResultsSummaryReporter(accessor);
         var reporter1 = Substitute.For<IReporter<TestResultsSummary>>();
         var reporter2 = new DummyReporter();
 
@@ -28,7 +30,8 @@ public partial class TestResultsSummaryReporterShould
     [Fact]
     public void TriggerReportMethodOnAllRegisteredReporters()
     {
-        var compositeReporter = new TestResultsSummaryReporter();
+        var accessor = new TestResultsSummaryAccessor() { Summary = new() };
+        var compositeReporter = new CollectionTestResultsSummaryReporter(accessor);
         var reporter1 = Substitute.For<IReporter<TestResultsSummary>>();
         var reporter2 = new DummyReporter();
 
@@ -44,36 +47,18 @@ public partial class TestResultsSummaryReporterShould
     [Fact]
     public void ChangeTheStateOfSummaryWhenRegisteringTestResults()
     {
-        var reporter = new TestResultsSummaryReporter();
+        var accessor = new TestResultsSummaryAccessor() { Summary = new CollectionTestResultsSummary() };
+        var reporter = new CollectionTestResultsSummaryReporter(accessor);
         var skippedTestResult = new TestResult.NotRun() { TestName = "Ignored Test" };
         var passedTestResult = new TestResult.Passed(20) { TestName = "Passed Test" };
         var failedTestResult = new TestResult.Failed(10, "Unknown reason.", null) { TestName = "Failed Test" };
 
-        reporter.RegisterTestResult(skippedTestResult);
-        reporter.RegisterTestResult(passedTestResult);
-        reporter.RegisterTestResult(failedTestResult);
+        reporter.Initialize();
+        reporter.RegisterTestResult("test-case", skippedTestResult);
+        reporter.RegisterTestResult("test-case", passedTestResult);
+        reporter.RegisterTestResult("test-case", failedTestResult);
 
-        var summary = reporter.GetTestResultsSummary();
-
-        CheckSummary(skippedTestResult, failedTestResult, summary);
-    }
-
-    [Fact]
-    public void ResetTheStateOfSummaryWhenResetMethodIsCalled()
-    {
-        var reporter = new TestResultsSummaryReporter();
-        var skippedTestResult = new TestResult.NotRun() { TestName = "Ignored Test" };
-        var passedTestResult = new TestResult.Passed(20) { TestName = "Passed Test" };
-        var failedTestResult = new TestResult.Failed(10, "Unknown reason.", null) { TestName = "Failed Test" };
-
-        reporter.RegisterTestResult(skippedTestResult);
-        reporter.RegisterTestResult(passedTestResult);
-        reporter.RegisterTestResult(failedTestResult);
-
-        reporter.Reset();
-        var emptySummary = reporter.GetTestResultsSummary();
-
-        CheckEmptySummary(emptySummary);
+        CheckSummary(skippedTestResult, failedTestResult, accessor.Summary);
     }
 
     private static void CheckSummary(
@@ -102,27 +87,5 @@ public partial class TestResultsSummaryReporterShould
 
         Contains(failedTestResult, summary.FailedTests);
         Single(summary.FailedTests);
-    }
-
-    private static void CheckEmptySummary(TestResultsSummary summary)
-    {
-        True(summary.AllTestsPassed);
-        False(summary.HasSkippedTests);
-
-        Equal(0, summary.NumberOfPassedTests);
-        Equal(0, summary.NumberOfFailedTests);
-        Equal(0, summary.NumberOfSkippedTests);
-
-        Equal(0, summary.PercentageOfPassedTests);
-        Equal(0, summary.PercentageOfFailedTests);
-        Equal(0, summary.PercentageOfSkippedTests);
-
-        Equal(0, summary.NumberOfExecutedTests);
-        Equal(0, summary.NumberOfTests);
-
-        Equal(0, summary.TimeElapsedDuringTesting);
-
-        Empty(summary.SkippedTests);
-        Empty(summary.FailedTests);
     }
 }

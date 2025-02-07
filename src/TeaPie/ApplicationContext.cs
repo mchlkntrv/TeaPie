@@ -13,13 +13,18 @@ internal class ApplicationContext(
     ILogger logger,
     string tempFolderPath,
     string environment = "",
-    string environmentFilePath = "")
+    string environmentFilePath = "",
+    string reportFilePath = "")
 {
     public string Path { get; } = path.NormalizePath();
     public string TempFolderPath { get; set; } = tempFolderPath.NormalizePath();
 
     public string EnvironmentName { get; set; } = environment;
     public string EnvironmentFilePath { get; set; } = environmentFilePath;
+
+    public readonly string ReportFilePath = reportFilePath;
+
+    public string CollectionName => System.IO.Path.GetFileName(Path);
 
     public IReadOnlyCollectionStructure CollectionStructure { get; set; } = new CollectionStructure();
     public IReadOnlyCollection<TestCase> TestCases => CollectionStructure.TestCases;
