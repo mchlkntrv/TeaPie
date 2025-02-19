@@ -2,9 +2,7 @@
 
 internal class DateHeaderHandler : IHeaderHandler
 {
-    const string HeaderName = "Date";
-
-    public bool CanResolve(string name) => name.Equals(HeaderName, StringComparison.OrdinalIgnoreCase);
+    public string HeaderName => "Date";
 
     public void SetHeader(string value, HttpRequestMessage requestMessage)
     {

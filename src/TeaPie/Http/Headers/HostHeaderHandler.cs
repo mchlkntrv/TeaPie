@@ -2,9 +2,7 @@
 
 internal class HostHeaderHandler : IHeaderHandler
 {
-    const string HeaderName = "Host";
-
-    public bool CanResolve(string name) => name.Equals(HeaderName, StringComparison.OrdinalIgnoreCase);
+    public string HeaderName => "Host";
 
     public void SetHeader(string value, HttpRequestMessage requestMessage)
        => requestMessage.Headers.Host = value;

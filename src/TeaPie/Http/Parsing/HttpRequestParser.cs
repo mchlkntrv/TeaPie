@@ -1,8 +1,9 @@
 ﻿using System.Text;
 using TeaPie.Http.Headers;
+using TeaPie.Http.Retrying;
 using TeaPie.Variables;
 
-namespace TeaPie.Http;
+namespace TeaPie.Http.Parsing;
 
 internal interface IHttpRequestParser
 {
@@ -12,15 +13,19 @@ internal interface IHttpRequestParser
 internal class HttpRequestParser(
     IHttpRequestHeadersProvider headersProvider,
     IVariablesResolver variablesResolver,
-    IHeadersHandler headersResolver)
+    IHeadersHandler headersResolver,
+    IResiliencePipelineProvider resiliencePipelineProvider)
     : IHttpRequestParser
 {
     private readonly IHttpRequestHeadersProvider _headersProvider = headersProvider;
     private readonly IVariablesResolver _variablesResolver = variablesResolver;
     private readonly IHeadersHandler _headersResolver = headersResolver;
+    private readonly IResiliencePipelineProvider _resiliencePipelineProvider = resiliencePipelineProvider;
+
     private readonly IEnumerable<ILineParser> _lineParsers =
     [
         new CommentLineParser(),
+        new RetryDirectivesLineParser(),
         new EmptyLineParser(),
         new MethodAndUriParser(),
         new HeaderParser(),
@@ -72,6 +77,12 @@ internal class HttpRequestParser(
         {
             requestExecutionContext.Name = parsingContext.RequestName;
         }
+
+        requestExecutionContext.ResiliencePipeline =
+            _resiliencePipelineProvider.GetResiliencePipeline(
+                parsingContext.RetryStrategyName,
+                parsingContext.ExplicitRetryStrategy,
+                parsingContext.RetryUntilStatusCodes);
     }
 
     private static void CreateMessageContent(HttpParsingContext context, HttpRequestMessage requestMessage)

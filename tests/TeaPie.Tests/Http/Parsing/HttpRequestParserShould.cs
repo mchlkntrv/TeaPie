@@ -1,12 +1,15 @@
 ﻿using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using TeaPie.Http;
 using TeaPie.Http.Headers;
+using TeaPie.Http.Parsing;
+using TeaPie.Http.Retrying;
 using TeaPie.StructureExploration;
 using TeaPie.Variables;
 using File = TeaPie.StructureExploration.File;
 
-namespace TeaPie.Tests.Http;
+namespace TeaPie.Tests.Http.Parsing;
 
 public class HttpRequestParserShould
 {
@@ -208,7 +211,8 @@ public class HttpRequestParserShould
         var variablesResolver = new VariablesResolver(variables, serviceProvider);
         var headersResolver = new HeadersHandler();
 
-        var parser = new HttpRequestParser(headersProvider, variablesResolver, headersResolver);
+        var parser = new HttpRequestParser(
+            headersProvider, variablesResolver, headersResolver, Substitute.For<IResiliencePipelineProvider>());
 
         var folder =
             new Folder(RequestsIndex.RootFolderFullPath, RequestsIndex.RootFolderName, RequestsIndex.RootFolderName, null);

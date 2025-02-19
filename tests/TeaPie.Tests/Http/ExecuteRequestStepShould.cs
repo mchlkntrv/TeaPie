@@ -1,8 +1,12 @@
 ﻿using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using NSubstitute;
 using System.Net;
 using TeaPie.Http;
 using TeaPie.Http.Headers;
+using TeaPie.Http.Parsing;
+using TeaPie.Http.Retrying;
 using TeaPie.TestCases;
 using TeaPie.Variables;
 
@@ -29,7 +33,8 @@ public class ExecuteRequestStepShould
 
         var accessor = new RequestExecutionContextAccessor() { Context = context };
 
-        var step = new ExecuteRequestStep(serviceProvider.GetRequiredService<IHttpClientFactory>(), accessor);
+        var step = new ExecuteRequestStep(
+            serviceProvider.GetRequiredService<IHttpClientFactory>(), accessor, Substitute.For<IHeadersHandler>());
 
         await step.Invoking(async step => await step.Execute(appContext)).Should().ThrowAsync<InvalidOperationException>();
     }
@@ -50,7 +55,8 @@ public class ExecuteRequestStepShould
         var parser = CreateParser(serviceProvider);
         parser.Parse(context);
 
-        var step = new ExecuteRequestStep(serviceProvider.GetRequiredService<IHttpClientFactory>(), accessor);
+        var step = new ExecuteRequestStep(
+            serviceProvider.GetRequiredService<IHttpClientFactory>(), accessor, Substitute.For<IHeadersHandler>());
 
         await step.Execute(appContext);
 
@@ -87,7 +93,8 @@ public class ExecuteRequestStepShould
         var parser = CreateParser(serviceProvider);
         parser.Parse(context);
 
-        var step = new ExecuteRequestStep(serviceProvider.GetRequiredService<IHttpClientFactory>(), accessor);
+        var step = new ExecuteRequestStep(
+            serviceProvider.GetRequiredService<IHttpClientFactory>(), accessor, Substitute.For<IHeadersHandler>());
 
         await step.Execute(appContext);
 
@@ -130,8 +137,12 @@ public class ExecuteRequestStepShould
         var variables = new global::TeaPie.Variables.Variables();
         var variablesResolver = new VariablesResolver(variables, serviceProvider);
         var headersResolver = new HeadersHandler();
+        var retryStrategyRegistry = new RetryStrategyRegistry();
+        var resiliencePipelineProvider = new ResiliencePipelineProvider(
+            retryStrategyRegistry, Substitute.For<ILogger<ResiliencePipelineProvider>>());
 
-        return new HttpRequestParser(headersProvider, variablesResolver, headersResolver);
+        return new HttpRequestParser(
+            headersProvider, variablesResolver, headersResolver, resiliencePipelineProvider);
     }
 
     private class CustomHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responseGenerator) : HttpMessageHandler

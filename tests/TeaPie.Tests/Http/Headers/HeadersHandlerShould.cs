@@ -1,8 +1,8 @@
 ﻿using FluentAssertions;
 using System.Data;
 using System.Net.Http.Headers;
-using TeaPie.Http;
 using TeaPie.Http.Headers;
+using TeaPie.Http.Parsing;
 
 namespace TeaPie.Tests.Http.Headers;
 
@@ -111,7 +111,7 @@ public class HeadersHandlerShould
 
         _headersHandler.Invoking(hh => hh.SetHeaders(parsingContext, requestMessage)).Should()
            .Throw<InvalidOperationException>()
-           .WithMessage("Unable to set header 'Content-Type' when body's content is null.");
+           .WithMessage("Unable to resolve 'Content-Type' header with the value 'application/json'.");
     }
 
     [Fact]

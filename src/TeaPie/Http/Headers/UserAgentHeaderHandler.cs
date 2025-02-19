@@ -2,9 +2,7 @@
 
 internal class UserAgentHeaderHandler : IHeaderHandler
 {
-    const string HeaderName = "User-Agent";
-
-    public bool CanResolve(string name) => name.Equals(HeaderName, StringComparison.OrdinalIgnoreCase);
+    public string HeaderName => "User-Agent";
 
     public void SetHeader(string value, HttpRequestMessage requestMessage)
         => requestMessage.Headers.UserAgent.ParseAdd(value);

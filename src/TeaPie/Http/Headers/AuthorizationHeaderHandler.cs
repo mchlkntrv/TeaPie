@@ -4,9 +4,7 @@ namespace TeaPie.Http.Headers;
 
 internal class AuthorizationHeaderHandler : IHeaderHandler
 {
-    const string HeaderName = "Authorization";
-
-    public bool CanResolve(string name) => name.Equals(HeaderName, StringComparison.OrdinalIgnoreCase);
+    public string HeaderName => "Authorization";
 
     public void SetHeader(string value, HttpRequestMessage requestMessage)
     {
