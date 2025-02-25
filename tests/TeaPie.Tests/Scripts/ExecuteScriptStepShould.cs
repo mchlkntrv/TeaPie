@@ -1,12 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using TeaPie.Http.Retrying;
-using TeaPie.Pipelines;
-using TeaPie.Reporting;
 using TeaPie.Scripts;
-using TeaPie.TestCases;
-using TeaPie.Testing;
 using TeaPie.Variables;
 
 namespace TeaPie.Tests.Scripts;
@@ -17,15 +12,12 @@ public class ExecuteScriptStepShould
     [Fact]
     public async void ExecuteScriptWithNuGetPackageWithoutAnyProblem()
     {
-        var logger = NullLogger.Instance;
         var context = ScriptHelper.GetScriptExecutionContext(ScriptIndex.ScriptWithOneNuGetDirectivePath);
         var accessor = new ScriptExecutionContextAccessor() { Context = context };
         await ScriptHelper.PrepareScriptForExecution(context);
 
         var step = new ExecuteScriptStep(accessor);
-        var appContext = new ApplicationContextBuilder()
-            .WithLogger(logger)
-            .Build();
+        var appContext = new ApplicationContextBuilder().Build();
 
         await step.Execute(appContext);
     }
@@ -33,7 +25,7 @@ public class ExecuteScriptStepShould
     [Fact]
     public async void AccessTeaPieLoggerDuringScriptExectutionWithoutAnyProblem()
     {
-        var logger = Substitute.For<ILogger>();
+        var logger = NullLogger.Instance;
         var context = ScriptHelper.GetScriptExecutionContext(ScriptIndex.ScriptAccessingTeaPieLogger);
         var accessor = new ScriptExecutionContextAccessor() { Context = context };
 
@@ -45,8 +37,7 @@ public class ExecuteScriptStepShould
         await ScriptHelper.PrepareScriptForExecution(context);
 
         await step.Execute(appContext);
-
-        logger.Received(1).LogInformation("It is possible to access TeaPie instance!");
+        Assert.Equal("CustomEnvironment", TeaPie.Instance!.ApplicationContext.EnvironmentName);
     }
 
     [Fact]
@@ -76,13 +67,9 @@ public class ExecuteScriptStepShould
     }
 
     private static void PrepareTeaPieInstance(ILogger logger, ApplicationContext appContext, IVariables? variables = null)
-        => TeaPie.Create(
-            variables ?? Substitute.For<IVariables>(),
-            logger,
-            Substitute.For<ITester>(),
-            Substitute.For<ICurrentTestCaseExecutionContextAccessor>(),
-            appContext,
-            Substitute.For<IPipeline>(),
-            Substitute.For<ITestResultsSummaryReporter>(),
-            Substitute.For<IRetryStrategyRegistry>());
+        => new TeaPieBuilder()
+            .WithApplicationContext(appContext)
+            .WithService(variables ?? Substitute.For<IVariables>())
+            .WithService(logger)
+            .Build();
 }

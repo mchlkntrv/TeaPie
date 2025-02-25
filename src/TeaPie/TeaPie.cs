@@ -1,7 +1,8 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using TeaPie.Environments;
+using TeaPie.Http.Auth;
 using TeaPie.Http.Retrying;
-using TeaPie.Pipelines;
 using TeaPie.Reporting;
 using TeaPie.TestCases;
 using TeaPie.Testing;
@@ -14,50 +15,53 @@ public sealed class TeaPie : IVariablesExposer, IExecutionContextExposer
     public static TeaPie? Instance { get; private set; }
 
     internal static TeaPie Create(
-        IVariables variables,
-        ILogger logger,
-        ITester tester,
-        ICurrentTestCaseExecutionContextAccessor currentTestCaseExecutionContextAccessor,
         ApplicationContext applicationContext,
-        IPipeline pipeline,
-        ITestResultsSummaryReporter reporter,
-        IRetryStrategyRegistry retryStrategyRegistry)
+        IServiceProvider serviceProvider)
     {
         Instance = new(
-            variables,
-            logger,
-            tester,
-            currentTestCaseExecutionContextAccessor,
             applicationContext,
-            pipeline,
-            reporter,
-            retryStrategyRegistry);
+            serviceProvider,
+            serviceProvider.GetRequiredService<IVariables>(),
+            serviceProvider.GetRequiredService<ILogger<TeaPie>>(),
+            serviceProvider.GetRequiredService<ITester>(),
+            serviceProvider.GetRequiredService<ICurrentTestCaseExecutionContextAccessor>(),
+            serviceProvider.GetRequiredService<ITestResultsSummaryReporter>(),
+            serviceProvider.GetRequiredService<IRetryStrategyRegistry>(),
+            serviceProvider.GetRequiredService<IAuthProviderRegistry>(),
+            serviceProvider.GetRequiredService<ICurrentAndDefaultAuthProviderAccessor>());
 
         return Instance;
     }
 
     private TeaPie(
+        ApplicationContext applicationContext,
+        IServiceProvider serviceProvider,
         IVariables variables,
         ILogger logger,
         ITester tester,
         ICurrentTestCaseExecutionContextAccessor currentTestCaseExecutionContextAccessor,
-        ApplicationContext applicationContext,
-        IPipeline pipeline,
         ITestResultsSummaryReporter reporter,
-        IRetryStrategyRegistry retryStrategiesRegistry)
+        IRetryStrategyRegistry retryStrategiesRegistry,
+        IAuthProviderRegistry authenticationProviderRegistry,
+        ICurrentAndDefaultAuthProviderAccessor defaultAuthProviderAccessor)
     {
+        _applicationContext = applicationContext;
+        _serviceProvider = serviceProvider;
+
         _variables = variables;
         Logger = logger;
         _tester = tester;
         _currentTestCaseExecutionContextAccessor = currentTestCaseExecutionContextAccessor;
-        _applicationContext = applicationContext;
-        _pipeline = pipeline;
         _reporter = reporter;
         _retryStrategyRegistry = retryStrategiesRegistry;
+        _authenticationProviderRegistry = authenticationProviderRegistry;
+        _defaultAuthProviderAccessor = defaultAuthProviderAccessor;
     }
 
+    internal IServiceProvider _serviceProvider;
+
     private readonly ApplicationContext _applicationContext;
-    private readonly IPipeline _pipeline;
+    public IApplicationContext ApplicationContext => _applicationContext;
 
     #region Logging
     public ILogger Logger { get; }
@@ -138,7 +142,7 @@ public sealed class TeaPie : IVariablesExposer, IExecutionContextExposer
     public void SetEnvironment(string name)
     {
         _applicationContext.EnvironmentName = name;
-        _pipeline.InsertSteps(null, _applicationContext.ServiceProvider.GetStep<SetEnvironmentStep>());
+        Task.Run(() => _applicationContext.ServiceProvider.GetStep<SetEnvironmentStep>().Execute(_applicationContext));
     }
     #endregion
 
@@ -148,5 +152,10 @@ public sealed class TeaPie : IVariablesExposer, IExecutionContextExposer
 
     #region Re-trying
     internal readonly IRetryStrategyRegistry _retryStrategyRegistry;
+    #endregion
+
+    #region Authentication
+    internal readonly IAuthProviderRegistry _authenticationProviderRegistry;
+    internal readonly ICurrentAndDefaultAuthProviderAccessor _defaultAuthProviderAccessor;
     #endregion
 }
