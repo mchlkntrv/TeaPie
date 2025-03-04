@@ -3,7 +3,6 @@ using Polly;
 using Polly.Retry;
 using System.Net;
 using System.Text;
-using TeaPie.Http.Parsing;
 using ResiliencePipeline = Polly.ResiliencePipeline<System.Net.Http.HttpResponseMessage>;
 using RetryStrategy = Polly.Retry.RetryStrategyOptions<System.Net.Http.HttpResponseMessage>;
 
@@ -162,7 +161,7 @@ internal class ResiliencePipelineProvider(IRetryStrategyRegistry registry, ILogg
         };
 
     private static string GetNameForRetryUntilStatusCodes(IReadOnlyList<HttpStatusCode> statusCodes)
-        => HttpFileParserConstants.RetryStrategyDirectiveName + "-" + string.Join('-', statusCodes.Select(sc => (int)sc));
+        => RetryingDirectives.RetryStrategyDirectiveFullName + "-" + string.Join('-', statusCodes.Select(sc => (int)sc));
 
     private ResiliencePipeline<HttpResponseMessage> GetResiliencePipeline(string name, RetryStrategy retryStrategy, bool altered)
     {

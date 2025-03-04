@@ -2,17 +2,32 @@
 
 internal static class HttpFileParserConstants
 {
+    #region Naming Patterns
+
     private const string SimpleNamePattern = "[a-zA-Z0-9_-]+";
     private const string StructureVariableNamePatternBase = "[a-zA-Z0-9_.$-]+";
     public const string VariableNamePattern = "^" + StructureVariableNamePatternBase + "$";
     public const string VariableNotationPattern = "{{(" + StructureVariableNamePatternBase + ")}}";
 
-    public const string HeaderNamePattern = "^[A-Za-z0-9!#$%&'*+.^_`|~-]+$";
+    public const string HeaderNameBasePattern = "[A-Za-z0-9!#$%&'*+.^_`|~-]+";
+    public const string HeaderNamePattern = "^" + HeaderNameBasePattern + "$";
     public const string HeaderValuePattern = @"^[\t\x20-\x7E\x80-\xFF]*$";
 
     public const string RequestNameMetadataGroupName = "name";
     public const string RequestNameMetadataPattern =
         @"@name\s+(?<" + RequestNameMetadataGroupName + ">" + SimpleNamePattern + ")";
+
+    #endregion
+
+    #region Directives
+
+    public const string DirectivePrefixPattern = @"^##\s*";
+
+    #endregion
+
+    #region Request
+
+    #region Request Variables
 
     public const string RequestVariableSeparator = ".";
     public const string RequestSelector = "request";
@@ -21,35 +36,15 @@ internal static class HttpFileParserConstants
     public const string HeadersSelector = "headers";
     public const string WholeBodySelector = "*";
 
-    public const string AuthProviderDirectiveName = "AUTH-PROVIDER";
-    public const string AuthProviderSelectorDirectivePattern =
-        @"^##\s*" + AuthProviderDirectiveName + @":\s*(?<AuthProvider>.+?)\s*$";
-
-    public const string RetryStrategyDirectiveName = "RETRY-STRATEGY";
-    public const string RetryStrategySelectorDirectivePattern =
-        @"^##\s*" + RetryStrategyDirectiveName + @":\s*(?<StrategyName>.+?)\s*$";
-
-    public const string RetryUntilStatusCodesDirectiveName = "RETRY-UNTIL-STATUS";
-    public const string RetryUntilStatusCodesDirectivePattern =
-        @"^##\s*" + RetryUntilStatusCodesDirectiveName + @":\s*\[(?<StatusCodes>[0-9,\s]+)\]\s*$";
-
-    public const string RetryMaxAttemptsDirectiveName = "RETRY-MAX-ATTEMPTS";
-    public const string RetryMaxAttemptsDirectivePattern =
-        @"^##\s*" + RetryMaxAttemptsDirectiveName + @":\s*(?<MaxAttempts>\d+)\s*$";
-
-    public const string RetryBackoffTypeDirectiveName = "RETRY-BACKOFF-TYPE";
-    public const string RetryBackoffTypeDirectivePattern =
-        @"^##\s*" + RetryBackoffTypeDirectiveName + @":\s*(?<BackoffType>\w+)\s*$";
-
-    public const string RetryMaxDelayDirectiveName = "RETRY-MAX-DELAY";
-    public const string RetryMaxDelayDirectivePattern =
-        @"^##\s*" + RetryMaxDelayDirectiveName + @":\s*(?<MaxDelay>\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?)\s*$";
-
     public const string RequestVariablePattern =
         "^" + SimpleNamePattern + @"\" + RequestVariableSeparator +
         "(" + RequestSelector + "|" + ResponseSelector + @")\" + RequestVariableSeparator +
         "(" + BodySelector + "|" + HeadersSelector + @")\" + RequestVariableSeparator +
         @"(\*|(\$[^\s]+)|([A-Za-z0-9!#$%&'*+.^_`|~-]+(\.[A-Za-z0-9!#$%&'*+.^_`|~-]+)*)|)";
+
+    #endregion
+
+    #region Request Definition
 
     public const string RequestMethodAndUriLinePattern =
         @"\b(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE)\b\s+.+";
@@ -82,6 +77,10 @@ internal static class HttpFileParserConstants
             { HttpTraceMethodDirective, HttpMethod.Trace }
         };
 
+    #endregion
+
+    #region Headers
+
     public static readonly List<string> SpecialHeaders =
         [
             "Content-Type",
@@ -94,4 +93,8 @@ internal static class HttpFileParserConstants
             "Date",
             "Connection"
         ];
+
+    #endregion
+
+    #endregion
 }

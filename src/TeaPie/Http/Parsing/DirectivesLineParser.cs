@@ -1,9 +1,13 @@
-﻿namespace TeaPie.Http.Parsing;
+﻿using TeaPie.Http.Retrying;
+using TeaPie.Testing;
+
+namespace TeaPie.Http.Parsing;
 
 internal class DirectivesLineParser : ILineParser
 {
     private readonly IEnumerable<ILineParser> _parsers = [
         new AuthProviderDirectiveLineParser(),
+        new TestDirectivesLineParser(),
         new RetryStrategyDirectiveLineParser(),
         new RetryUntilStatusCodesLineParser(),
         new RetryExplicitPropertiesDirectiveLineParser()

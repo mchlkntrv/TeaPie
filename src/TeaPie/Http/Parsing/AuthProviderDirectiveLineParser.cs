@@ -1,28 +1,24 @@
 ﻿using System.Text.RegularExpressions;
+using TeaPie.Http.Auth;
 
 namespace TeaPie.Http.Parsing;
 
-internal partial class AuthProviderDirectiveLineParser : ILineParser
+internal class AuthProviderDirectiveLineParser : ILineParser
 {
     public bool CanParse(string line, HttpParsingContext context)
-        => AuthProviderSelectorRegex().IsMatch(line);
+        => Regex.IsMatch(line, AuthDirectives.AuthProviderSelectorDirectivePattern);
 
     public void Parse(string line, HttpParsingContext context)
     {
-        var match = AuthProviderSelectorRegex().Match(line);
+        var match = Regex.Match(line, AuthDirectives.AuthProviderSelectorDirectivePattern);
         if (match.Success)
         {
-            context.AuthProviderName = match.Groups["AuthProvider"].Value;
+            context.AuthProviderName = match.Groups[AuthDirectives.AuthProviderDirectiveParameterName].Value;
         }
         else
         {
             throw new InvalidOperationException(
-                $"Unable to parse '{HttpFileParserConstants.AuthProviderDirectiveName}' directive.");
+                $"Unable to parse '{AuthDirectives.AuthProviderDirectiveFullName}' directive.");
         }
     }
-
-    [GeneratedRegex(
-        HttpFileParserConstants.AuthProviderSelectorDirectivePattern,
-        RegexOptions.IgnoreCase | RegexOptions.Compiled, "sk-SK")]
-    private static partial Regex AuthProviderSelectorRegex();
 }

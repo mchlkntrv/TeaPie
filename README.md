@@ -189,6 +189,83 @@ For **named requests**, you can access request and response data using the follo
 
 This gives you comprehensive access to headers and body content of named requests.
 
+<!-- omit from toc -->
+### Test Directives
+
+TeaPie provides **pre-defined test directives** that can be applied within `.http` files to automate response validation.
+Additionally, users can **register custom test directives**, enabling more flexible and reusable test configurations.
+
+<!-- omit from toc -->
+#### Predefined Test Directives
+
+TeaPie supports the following built-in test directives:
+
+- `## TEST-EXPECT-STATUS: [200, 201]` – Ensures the response status code matches any value in the array.
+- `## TEST-HAS-BODY` (Equivalent to `## TEST-HAS-BODY: True`) – Checks if the response contains a body.
+- `## TEST-HAS-HEADER: Content-Type` – Verifies that the specified header is present in the response.
+
+Example usage in a `.http` file:
+
+```http
+## TEST-EXPECT-STATUS: [200, 201]
+## TEST-HAS-BODY
+## TEST-HAS-HEADER: Content-Type
+PUT {{ApiBaseUrl}}{{ApiCarsSection}}/{{AddCarRequest.request.body.$.Id}}
+Content-Type: {{AddCarRequest.request.headers.Content-Type}}
+
+...
+```
+
+<!-- omit from toc -->
+#### Registering Custom Test Directives
+
+TeaPie allows users to **define and register custom test directives** dynamically.
+To register a **custom test directive**, use the following method:
+
+```csharp
+tp.RegisterTestDirective(
+    string directiveName, // Directive name (excluding 'TEST-' prefix)
+    string directivePattern, // Regular expression pattern for parser to recognize the directive
+    Func<IReadOnlyDictionary<string, string>, string> testNameGetter, // Function to generate the test name based on input parameters
+    Func<HttpResponseMessage, IReadOnlyDictionary<string, string>, Task> testFunction // Function to execute when the directive is applied
+);
+```
+
+The following example registers a custom directive, `## TEST-CUSTOM: <true|false>`:
+
+```csharp
+tp.RegisterTestDirective(
+    "CUSTOM", // Name of the directive (excluding 'TEST-' prefix)
+    TestDirectivePatternBuilder.Create("CUSTOM") // For Regex pattern generation it is recommended to use 'TestDirectivePatternBuilder'
+        .AddBooleanParameter("MyBool") // Users can add multiple parameters, all with different data types. Default deparator between parameters is ';'.
+        .Build(),
+    (parameters) => {
+        var negation = bool.Parse(parameters["MyBool"]) ? string.Empty : "NOT "
+        $"Response status code should {negation}be successful."
+    },
+    async (response, parameters) =>
+    {
+        if (bool.Parse(parameters["MyBool"]))
+        {
+            True(response.IsSuccessStatusCode);
+        }
+        else
+        {
+            False(response.IsSuccessStatusCode);
+        }
+
+        await Task.CompletedTask;
+    }
+);
+```
+
+Now, the directive is ready to be used in a `.http` file:
+
+```http
+## TEST-CUSTOM: True
+GET {{ApiBaseUrl}}{{ApiCarsSection}}/{{RentCarRequest.request.body.$.CarId}}
+```
+
 ### Authentication
 
 To provide maximum flexibility, an **authentication interceptor** is applied to all outgoing HTTP requests. The **authentication provider** to be used within interceptor **can be specified in scripts** or directly within **request files**.

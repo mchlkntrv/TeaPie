@@ -1,17 +1,18 @@
 ﻿using Polly;
 using Polly.Retry;
 using System.Text.RegularExpressions;
+using TeaPie.Http.Parsing;
 
-namespace TeaPie.Http.Parsing;
+namespace TeaPie.Http.Retrying;
 
 internal class RetryExplicitPropertiesDirectiveLineParser : ILineParser
 {
     private readonly IReadOnlyDictionary<string, Action<Match, HttpParsingContext>> _strategies =
         new Dictionary<string, Action<Match, HttpParsingContext>>()
         {
-           { HttpFileParserConstants.RetryMaxAttemptsDirectivePattern, ParseMaxAttemptsDirective},
-           { HttpFileParserConstants.RetryBackoffTypeDirectivePattern, ParseBackoffTypeDirective},
-           { HttpFileParserConstants.RetryMaxDelayDirectivePattern, ParseMaxDelayDirective}
+           { RetryingDirectives.RetryMaxAttemptsDirectivePattern, ParseMaxAttemptsDirective},
+           { RetryingDirectives.RetryBackoffTypeDirectivePattern, ParseBackoffTypeDirective},
+           { RetryingDirectives.RetryMaxDelayDirectivePattern, ParseMaxDelayDirective}
         };
 
     public bool CanParse(string line, HttpParsingContext context)
@@ -64,9 +65,9 @@ internal class RetryExplicitPropertiesDirectiveLineParser : ILineParser
         string sectionName,
         Action<HttpParsingContext, string> assignFunction)
     {
-        var maxAttempts = match.Groups[sectionName].Value;
+        var value = match.Groups[sectionName].Value;
         context.ExplicitRetryStrategy ??= new RetryStrategyOptions<HttpResponseMessage>();
 
-        assignFunction(context, maxAttempts);
+        assignFunction(context, value);
     }
 }

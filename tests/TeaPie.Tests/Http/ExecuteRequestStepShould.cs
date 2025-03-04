@@ -8,7 +8,9 @@ using TeaPie.Http.Auth;
 using TeaPie.Http.Headers;
 using TeaPie.Http.Parsing;
 using TeaPie.Http.Retrying;
+using TeaPie.Pipelines;
 using TeaPie.TestCases;
+using TeaPie.Testing;
 using TeaPie.Variables;
 
 namespace TeaPie.Tests.Http;
@@ -34,11 +36,7 @@ public class ExecuteRequestStepShould
 
         var accessor = new RequestExecutionContextAccessor() { Context = context };
 
-        var step = new ExecuteRequestStep(
-            serviceProvider.GetRequiredService<IHttpClientFactory>(),
-            accessor,
-            Substitute.For<IHeadersHandler>(),
-            Substitute.For<ICurrentAndDefaultAuthProviderAccessor>());
+        var step = GetExecuteRequestStep(serviceProvider, accessor);
 
         await step.Invoking(async step => await step.Execute(appContext)).Should().ThrowAsync<InvalidOperationException>();
     }
@@ -59,11 +57,7 @@ public class ExecuteRequestStepShould
         var parser = CreateParser(serviceProvider);
         parser.Parse(context);
 
-        var step = new ExecuteRequestStep(
-            serviceProvider.GetRequiredService<IHttpClientFactory>(),
-            accessor,
-            Substitute.For<IHeadersHandler>(),
-            Substitute.For<ICurrentAndDefaultAuthProviderAccessor>());
+        var step = GetExecuteRequestStep(serviceProvider, accessor);
 
         await step.Execute(appContext);
 
@@ -99,18 +93,23 @@ public class ExecuteRequestStepShould
 
         var parser = CreateParser(serviceProvider);
         parser.Parse(context);
-
-        var step = new ExecuteRequestStep(
-            serviceProvider.GetRequiredService<IHttpClientFactory>(),
-            accessor,
-            Substitute.For<IHeadersHandler>(),
-            Substitute.For<ICurrentAndDefaultAuthProviderAccessor>());
+        var step = GetExecuteRequestStep(serviceProvider, accessor);
 
         await step.Execute(appContext);
 
         testCaseContext.Response.Should().Be(context.Response);
         testCaseContext.Responses.ContainsKey(RequestName).Should().BeTrue();
     }
+
+    private static ExecuteRequestStep GetExecuteRequestStep(
+        ServiceProvider serviceProvider, RequestExecutionContextAccessor accessor)
+        => new(
+            serviceProvider.GetRequiredService<IHttpClientFactory>(),
+            accessor,
+            Substitute.For<IHeadersHandler>(),
+            Substitute.For<IAuthProviderAccessor>(),
+            Substitute.For<ITestScheduler>(),
+            Substitute.For<IPipeline>());
 
     private static CustomHttpMessageHandler CreateAndConfigureMessageHandler()
         => new(request =>
@@ -156,7 +155,9 @@ public class ExecuteRequestStepShould
             variablesResolver,
             headersResolver,
             resiliencePipelineProvider,
-            Substitute.For<IAuthProviderRegistry>());
+            Substitute.For<IAuthProviderRegistry>(),
+            Substitute.For<ITestFactory>(),
+            Substitute.For<ITestScheduler>());
     }
 
     private class CustomHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responseGenerator) : HttpMessageHandler
