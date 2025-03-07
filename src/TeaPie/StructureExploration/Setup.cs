@@ -5,10 +5,13 @@ namespace TeaPie.StructureExploration;
 
 internal static class Setup
 {
-    public static IServiceCollection AddStructureExploration(this IServiceCollection services)
+    public static IServiceCollection AddStructureExploration(
+        this IServiceCollection services, bool isCollectionRun)
     {
-        services.AddSingleton<IStructureExplorer, StructureExplorer>();
         services.AddSingleton<ITreeStructureRenderer, SpectreConsoleTreeStructureRenderer>();
-        return services;
+
+        return isCollectionRun
+            ? services.AddSingleton<IStructureExplorer, CollectionStructureExplorer>()
+            : services.AddSingleton<IStructureExplorer, TestCaseStructureExplorer>();
     }
 }

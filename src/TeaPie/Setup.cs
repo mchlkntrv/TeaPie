@@ -14,9 +14,10 @@ namespace TeaPie;
 
 internal static class Setup
 {
-    public static IServiceCollection AddTeaPie(this IServiceCollection services, Action loggingConfiguration)
+    public static IServiceCollection AddTeaPie(
+        this IServiceCollection services, bool isCollectionRun, Action loggingConfiguration)
     {
-        services.AddStructureExploration();
+        services.AddStructureExploration(isCollectionRun);
         services.AddHttp();
         services.AddEnvironments();
         services.AddTestCases();

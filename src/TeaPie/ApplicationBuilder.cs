@@ -15,6 +15,8 @@ public sealed class ApplicationBuilder
 {
     private readonly IServiceCollection _services;
 
+    private readonly bool _isCollectionRun;
+
     private string? _path;
     private string? _tempPath;
 
@@ -29,12 +31,13 @@ public sealed class ApplicationBuilder
 
     private Func<IServiceProvider, IPipelineStep[]> _pipelineBuildFunction = ApplicationStepsFactory.CreateDefaultPipelineSteps;
 
-    private ApplicationBuilder(IServiceCollection services)
+    private ApplicationBuilder(IServiceCollection services, bool collectionRun)
     {
         _services = services;
+        _isCollectionRun = collectionRun;
     }
 
-    public static ApplicationBuilder Create() => new(new ServiceCollection());
+    public static ApplicationBuilder Create(bool collectionRun = true) => new(new ServiceCollection(), collectionRun);
 
     public ApplicationBuilder WithPath(string path)
     {
@@ -129,7 +132,9 @@ public sealed class ApplicationBuilder
     }
 
     private void ConfigureServices()
-        => _services.AddTeaPie(() => _services.ConfigureLogging(_minimumLogLevel, _pathToLogFile, _minimumLevelForLogFile));
+        => _services.AddTeaPie(
+            _isCollectionRun,
+            () => _services.ConfigureLogging(_minimumLogLevel, _pathToLogFile, _minimumLevelForLogFile));
 
     private static TeaPie CreateUserContext(IServiceProvider provider, ApplicationContext applicationContext)
         => TeaPie.Create(

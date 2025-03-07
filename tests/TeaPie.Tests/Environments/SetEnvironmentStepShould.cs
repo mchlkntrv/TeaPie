@@ -54,10 +54,10 @@ public class SetEnvironmentStepShould
         services.AddSingleton<IVariables, global::TeaPie.Variables.Variables>();
         services.AddSingleton<IEnvironmentsRegistry, EnvironmentsRegistry>();
         services.AddSingleton<IPipeline, ApplicationPipeline>();
-        services.AddSingleton<IStructureExplorer, StructureExplorer>();
+        services.AddSingleton<IStructureExplorer, CollectionStructureExplorer>();
         services.AddSingleton<ICurrentTestCaseExecutionContextAccessor, CurrentTestCaseExecutionContextAccessor>();
+        services.AddSingleton<ITestResultsSummaryReporter, TestResultsSummaryReporter>();
         services.AddSingleton<ITestResultsSummaryAccessor, TestResultsSummaryAccessor>();
-        services.AddSingleton<ITestResultsSummaryReporter, CollectionTestResultsSummaryReporter>();
         services.AddLogging();
 
         provider = services.BuildServiceProvider();

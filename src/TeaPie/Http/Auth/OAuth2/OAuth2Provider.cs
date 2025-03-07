@@ -31,11 +31,12 @@ internal class OAuth2Provider(IHttpClientFactory clientFactory, IMemoryCache mem
     private async Task<string> GetToken()
     {
         var source = "cache";
-        if (!_cache.TryGetValue(AccessTokenCacheKey, out string? token))
+        var token = await _cache.GetOrCreateAsync(AccessTokenCacheKey, async _ =>
         {
-            token = await GetTokenFromRequest();
+            var newToken = await GetTokenFromRequest();
             source = ResolveRequestUri();
-        }
+            return newToken;
+        })!;
 
         _logger.LogTrace("{Subject} was fetched from {Source}.", "Access token", source);
         return token!;

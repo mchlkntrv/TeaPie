@@ -24,7 +24,7 @@ internal class ApplicationContext(
 
     public string InitializationScriptPath = options.InitializationScriptPath;
 
-    public string CollectionName => System.IO.Path.GetFileName(Path);
+    public string StructureName => System.IO.Path.GetFileNameWithoutExtension(Path).TrimSuffix(Constants.RequestSuffix);
 
     public IReadOnlyCollectionStructure CollectionStructure { get; set; } = new CollectionStructure();
     public IReadOnlyCollection<TestCase> TestCases => CollectionStructure.TestCases;
