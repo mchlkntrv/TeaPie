@@ -45,7 +45,7 @@ internal class SpectreConsoleTestResultsSummaryReporter : IReporter<TestResultsS
             summary.HasSkippedTests,
             (CompatibilityChecker.SupportsEmoji ? Emoji.Known.ThinkingFace + " " : string.Empty) + "Skipped Tests",
             summary.SkippedTests,
-            (result) => $"[bold orange1]Test skipped: [/][bold yellow]\"{result.TestName.EscapeMarkup()}\"[/]");
+            GetTestSkippedText);
 
     private static void ReportFailedTestsIfAny(TestResultsSummary summary, Table table)
         => ReportTestsGroup(
@@ -53,22 +53,29 @@ internal class SpectreConsoleTestResultsSummaryReporter : IReporter<TestResultsS
             !summary.AllTestsPassed,
             (CompatibilityChecker.SupportsEmoji ? Emoji.Known.CrossMark + " " : string.Empty) + "Failed Tests",
             summary.FailedTests,
-            (result) => $"[bold red]Test failed: [/][bold yellow]\"{result.TestName.EscapeMarkup()}\"[/]",
-            (result) => $"[bold red]Reason: [/][white]{((TestResult.Failed)result).ErrorMessage}[/]");
+            GetTestFailedText);
+
+    private static string GetTestSkippedText(TestResult result)
+        => $"[bold orange1]Test skipped: [/][bold yellow]\"{result.TestName.EscapeMarkup()}\"[/]" + Environment.NewLine +
+            $"[bold orange1]Test case: [/][italic aqua]{result.TestCasePath}[/]";
+
+    private static string GetTestFailedText(TestResult result)
+        => $"[bold red]Test failed: [/][bold yellow]\"{result.TestName.EscapeMarkup()}\"[/]" + Environment.NewLine +
+            $"[bold red]Test case: [/][italic aqua]{result.TestCasePath}[/]" + Environment.NewLine +
+            $"[bold red]Reason: [/][white]{((TestResult.Failed)result).ErrorMessage}[/]";
 
     private static void ReportTestsGroup(
         Table table,
         bool condition,
         string sectionName,
         IReadOnlyList<TestResult> testsCollection,
-        Func<TestResult, string> firstLineGetter,
-        Func<TestResult, string>? secondLineGetter = null)
+        Func<TestResult, string> textGetter)
     {
         if (condition)
         {
             table.AddEmptyRow();
 
-            var text = BuildTextFromCollectionElements(testsCollection, firstLineGetter, secondLineGetter);
+            var text = BuildTextFromCollectionElements(testsCollection, textGetter);
 
             AddTestsGroup(table, sectionName, text);
         }
@@ -76,18 +83,13 @@ internal class SpectreConsoleTestResultsSummaryReporter : IReporter<TestResultsS
 
     private static string BuildTextFromCollectionElements(
         IReadOnlyList<TestResult> testsCollection,
-        Func<TestResult, string> firstLineGetter,
-        Func<TestResult, string>? secondLineGetter)
+        Func<TestResult, string> textGetter)
     {
         var sb = new StringBuilder();
 
         foreach (var current in testsCollection)
         {
-            sb.AppendLine(firstLineGetter(current));
-            if (secondLineGetter is not null)
-            {
-                sb.AppendLine(secondLineGetter(current));
-            }
+            sb.AppendLine(textGetter(current));
 
             if (current != testsCollection[^1])
             {

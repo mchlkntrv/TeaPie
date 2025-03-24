@@ -3,18 +3,24 @@ using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using TeaPie.Http.Headers;
+using TeaPie.Variables;
 
 namespace TeaPie.Http.Auth.OAuth2;
 
-internal class OAuth2Provider(IHttpClientFactory clientFactory, IMemoryCache memoryCache, ILogger<OAuth2Provider> logger)
+internal class OAuth2Provider(
+    IHttpClientFactory clientFactory,
+    IMemoryCache memoryCache,
+    ILogger<OAuth2Provider> logger,
+    IVariables variables)
     : IAuthProvider<OAuth2Options>
 {
-    private const string AccessTokenCacheKey = "access_token";
+    private readonly string _accessTokenCacheKey = Guid.NewGuid() + "-access_token";
     private const string RedirectUriParameterKey = "redirect_uri";
 
     private readonly IHttpClientFactory _httpClientFactory = clientFactory;
     private readonly IMemoryCache _cache = memoryCache;
     private readonly ILogger<OAuth2Provider> _logger = logger;
+    private readonly IVariables _variables = variables;
 
     private readonly AuthorizationHeaderHandler _authorizationHeaderHandler = new();
     private OAuth2Options _configuration = new();
@@ -25,16 +31,18 @@ internal class OAuth2Provider(IHttpClientFactory clientFactory, IMemoryCache mem
     public IAuthProvider<OAuth2Options> ConfigureOptions(OAuth2Options configuration)
     {
         _configuration = configuration;
+        _cache.Remove(_accessTokenCacheKey);
         return this;
     }
 
     private async Task<string> GetToken()
     {
         var source = "cache";
-        var token = await _cache.GetOrCreateAsync(AccessTokenCacheKey, async _ =>
+        var token = await _cache.GetOrCreateAsync(_accessTokenCacheKey, async _ =>
         {
             var newToken = await GetTokenFromRequest();
             source = ResolveRequestUri();
+            SetVariableIfNeeded(newToken);
             return newToken;
         })!;
 
@@ -42,9 +50,19 @@ internal class OAuth2Provider(IHttpClientFactory clientFactory, IMemoryCache mem
         return token!;
     }
 
+    private void SetVariableIfNeeded(string newToken)
+    {
+        if (_configuration.AccessTokenVariableName is not null)
+        {
+            _variables.SetVariable(_configuration.AccessTokenVariableName, newToken);
+        }
+    }
+
     private async Task<string> GetTokenFromRequest()
     {
         ResolveParameters(out var requestContent, out var requestUri);
+
+        LogSendingRequest();
 
         var result = await SendRequest(requestContent, requestUri);
 
@@ -52,6 +70,22 @@ internal class OAuth2Provider(IHttpClientFactory clientFactory, IMemoryCache mem
 
         return result.AccessToken!;
     }
+
+    private void LogSendingRequest()
+    {
+        var body = string.Join(
+            Environment.NewLine, _configuration.GetParametersAsReadOnly().Select(ToStringMaskingSecrets));
+
+        _logger.LogTrace("Following HTTP request's body (www-url-encoded):{NewLine}{Body}",
+            Environment.NewLine,
+            body);
+    }
+
+    private static string ToStringMaskingSecrets(KeyValuePair<string, string> parameter)
+        => parameter.Key.Contains("password", StringComparison.OrdinalIgnoreCase) ||
+            parameter.Key.Contains("secret", StringComparison.OrdinalIgnoreCase)
+                ? $"{parameter.Key}={new string('*', parameter.Value.Length)}"
+                : $"{parameter.Key}={parameter.Value}";
 
     private void ResolveParameters(out FormUrlEncodedContent requestContent, out string requestUri)
     {
@@ -61,7 +95,7 @@ internal class OAuth2Provider(IHttpClientFactory clientFactory, IMemoryCache mem
 
     private async Task<OAuth2TokenResponse> SendRequest(FormUrlEncodedContent requestContent, string requestUri)
     {
-        using var client = _httpClientFactory.CreateClient(nameof(IAuthProvider<OAuth2Options>));
+        using var client = _httpClientFactory.CreateClient(nameof(OAuth2Provider));
         var response = await client.PostAsync(requestUri, requestContent);
         response.EnsureSuccessStatusCode();
 
@@ -82,7 +116,7 @@ internal class OAuth2Provider(IHttpClientFactory clientFactory, IMemoryCache mem
             Priority = CacheItemPriority.High
         };
 
-        _cache.Set(AccessTokenCacheKey, result.AccessToken, cacheEntryOptions);
+        _cache.Set(_accessTokenCacheKey, result.AccessToken, cacheEntryOptions);
     }
 
     private string ResolveRequestUri()

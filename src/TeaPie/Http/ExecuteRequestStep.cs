@@ -40,13 +40,9 @@ internal class ExecuteRequestStep(
         HttpRequestMessage request,
         CancellationToken cancellationToken = default)
     {
-        context.Logger.LogTrace("HTTP Request for '{RequestUri}' is going to be sent.", request!.RequestUri);
-
         var response = await ExecuteRequest(context, requestExecutionContext, resiliencePipeline, request, cancellationToken);
 
         InsertStepForScheduledTestsIfAny(context.ServiceProvider);
-
-        await LogResponse(context.Logger, response);
 
         return response;
     }
@@ -78,7 +74,11 @@ internal class ExecuteRequestStep(
 
     private void ResolveAuthProvider(RequestExecutionContext requestExecutionContext)
     {
-        if (requestExecutionContext.AuthProvider is not null)
+        if (requestExecutionContext.AuthProvider is null)
+        {
+            _authProviderAccessor.SetCurrentProviderToDefault();
+        }
+        else
         {
             _authProviderAccessor.CurrentProvider = requestExecutionContext.AuthProvider;
         }
@@ -149,14 +149,6 @@ internal class ExecuteRequestStep(
 
         _headersHandler.SetHeaders(originalMessage, request);
         return request;
-    }
-
-    private static async Task LogResponse(ILogger logger, HttpResponseMessage response)
-    {
-        logger.LogTrace("HTTP Response {StatusCode} ({ReasonPhrase}) was received from '{Uri}'.",
-            (int)response.StatusCode, response.ReasonPhrase, response.RequestMessage?.RequestUri);
-
-        logger.LogTrace("Body: {NewLine}{BodyContent}", Environment.NewLine, await response.GetBodyAsync());
     }
 
     private void ValidateContext(
