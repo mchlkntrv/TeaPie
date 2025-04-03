@@ -154,7 +154,7 @@ public sealed class TeaPie : IVariablesExposer, IExecutionContextExposer
     public void SetEnvironment(string name)
     {
         _applicationContext.EnvironmentName = name;
-        Task.Run(() => _applicationContext.ServiceProvider.GetStep<SetEnvironmentStep>().Execute(_applicationContext));
+        _applicationContext.ServiceProvider.GetStep<SetEnvironmentStep>().Execute(_applicationContext).Wait();
     }
     #endregion
 
@@ -169,5 +169,11 @@ public sealed class TeaPie : IVariablesExposer, IExecutionContextExposer
     #region Authentication
     internal readonly IAuthProviderRegistry _authenticationProviderRegistry;
     internal readonly IAuthProviderAccessor _authProviderAccessor;
+    #endregion
+
+    #region Exit
+    public void Exit(int exitCode = 0, string? reason = null)
+        => _applicationContext.PrematureTermination =
+            new("User", TerminationType.UserAction, reason ?? $"Terminated at: {DateTime.Now}", exitCode);
     #endregion
 }

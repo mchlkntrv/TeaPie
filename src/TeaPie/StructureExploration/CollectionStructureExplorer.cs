@@ -1,16 +1,21 @@
 ﻿using Microsoft.Extensions.Logging;
+using TeaPie.StructureExploration.Paths;
 
 namespace TeaPie.StructureExploration;
 
-internal partial class CollectionStructureExplorer(ILogger<CollectionStructureExplorer> logger)
-    : BaseStructureExplorer(logger)
+internal partial class CollectionStructureExplorer(IPathProvider pathProvider, ILogger<CollectionStructureExplorer> logger)
+    : BaseStructureExplorer(pathProvider, logger)
 {
     protected override CollectionStructure ExploreStructure(ApplicationContext applicationContext)
     {
         InitializeStructure(
-            applicationContext.Path, applicationContext.StructureName, out var rootFolder, out var collectionStructure);
+            applicationContext.Path,
+            applicationContext.StructureName,
+            out var collectionFolder,
+            out var teaPieFolder,
+            out var collectionStructure);
 
-        Explore(rootFolder, applicationContext, collectionStructure);
+        Explore(collectionFolder, teaPieFolder, applicationContext, collectionStructure);
 
         UpdateContext(applicationContext, collectionStructure);
 
@@ -19,9 +24,14 @@ internal partial class CollectionStructureExplorer(ILogger<CollectionStructureEx
 
     #region Exploration
 
-    private void Explore(Folder rootFolder, ApplicationContext applicationContext, CollectionStructure collectionStructure)
+    private void Explore(
+        Folder collectionFolder,
+        Folder teaPieFolder,
+        ApplicationContext applicationContext,
+        CollectionStructure collectionStructure)
     {
-        ExploreFolder(rootFolder, collectionStructure);
+        ExploreTeaPieFolder(teaPieFolder, collectionStructure);
+        ExploreFolder(collectionFolder, collectionStructure);
 
         RegisterOptionalFilesIfNeeded(applicationContext, collectionStructure);
     }

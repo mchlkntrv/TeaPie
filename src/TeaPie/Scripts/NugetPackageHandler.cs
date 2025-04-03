@@ -5,25 +5,29 @@ using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
 using System.Reflection;
+using TeaPie.StructureExploration.Paths;
 
 namespace TeaPie.Scripts;
 
 internal interface INuGetPackageHandler
 {
+    Task HandleNuGetPackage(NuGetPackageDescription nugetPackage);
+
     Task HandleNuGetPackages(IEnumerable<NuGetPackageDescription> nugetPackages);
 }
 
-internal partial class NuGetPackageHandler(ILogger<NuGetPackageHandler> logger, NuGet.Common.ILogger nugetLogger)
+internal partial class NuGetPackageHandler(
+    IPathProvider pathProvider,
+    ILogger<NuGetPackageHandler> logger,
+    NuGet.Common.ILogger nugetLogger)
     : INuGetPackageHandler
 {
+    private readonly IPathProvider _pathProvider = pathProvider;
     private readonly ILogger<NuGetPackageHandler> _logger = logger;
     private readonly NuGet.Common.ILogger _nugetLogger = nugetLogger;
 
     private readonly HashSet<NuGetPackageDescription> _downloadedNuGetPackages = [];
     private readonly HashSet<NuGetPackageDescription> _nugetPackagesInAssembly = [];
-
-    private static readonly string _packagesPath =
-        Path.Combine(Environment.CurrentDirectory, ScriptsConstants.DefaultNuGetPackagesFolderName);
 
     public async Task HandleNuGetPackages(IEnumerable<NuGetPackageDescription> nugetPackages)
     {
@@ -33,7 +37,7 @@ internal partial class NuGetPackageHandler(ILogger<NuGetPackageHandler> logger, 
         }
     }
 
-    private async Task HandleNuGetPackage(NuGetPackageDescription nugetPackage)
+    public async Task HandleNuGetPackage(NuGetPackageDescription nugetPackage)
     {
         await DownloadNuGet(nugetPackage);
         AddNuGetDllToAssembly(nugetPackage);
@@ -81,7 +85,7 @@ internal partial class NuGetPackageHandler(ILogger<NuGetPackageHandler> logger, 
         var downloadResult = await downloadResource.GetDownloadResourceResultAsync(
             new PackageIdentity(packageId, packageVersion),
             packageDownloadContext,
-            _packagesPath,
+            _pathProvider.NuGetPackagesFolderPath,
             _nugetLogger,
             CancellationToken.None);
 
@@ -110,8 +114,9 @@ internal partial class NuGetPackageHandler(ILogger<NuGetPackageHandler> logger, 
         }
     }
 
-    private static string GetNuGetPackageLocation(NuGetPackageDescription nugetPackage)
-        => Path.Combine(_packagesPath, nugetPackage.PackageName.ToLower(), nugetPackage.Version.ToLower());
+    private string GetNuGetPackageLocation(NuGetPackageDescription nugetPackage)
+        => Path.Combine(
+            _pathProvider.NuGetPackagesFolderPath, nugetPackage.PackageName.ToLower(), nugetPackage.Version.ToLower());
 
     private static string FindCompatibleFrameworkPath(string packagePath)
     {
@@ -138,14 +143,15 @@ internal partial class NuGetPackageHandler(ILogger<NuGetPackageHandler> logger, 
         var downloadResult = await downloadResource.GetDownloadResourceResultAsync(
             new PackageIdentity(dependencyInfo.Id, dependencyInfo.Version),
             packageDownloadContext,
-            _packagesPath,
+            _pathProvider.NuGetPackagesFolderPath,
             _nugetLogger,
             CancellationToken.None);
 
         if (downloadResult.Status == DownloadResourceResultStatus.Available)
         {
             await using var packageStream = downloadResult.PackageStream;
-            var packageFilePath = Path.Combine(_packagesPath,
+            var packageFilePath = Path.Combine(
+                _pathProvider.NuGetPackagesFolderPath,
                 $"{dependencyInfo.Id}.{dependencyInfo.Version}{ScriptsConstants.NuGetPackageFileExtension}");
             await using var fileStream = new FileStream(packageFilePath, FileMode.Create, FileAccess.Write);
             await packageStream.CopyToAsync(fileStream);

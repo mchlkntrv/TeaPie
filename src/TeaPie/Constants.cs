@@ -9,7 +9,7 @@ internal static class Constants
     public const string RequestSuffix = "-req";
     public const string PostResponseSuffix = "-test";
 
-    public const string EnvironmentFileSuffix = "-env";
+    public const string DefaultEnvironmentFileName = "env";
     public const string EnvironmentFileExtension = ".json";
     public const string DefaultEnvironmentName = "$shared";
 
@@ -19,5 +19,7 @@ internal static class Constants
 
     public const string DefaultInitializationScriptName = "init";
 
-    public static readonly string DefaultTemporaryFolderPath = Path.Combine(Path.GetTempPath(), ApplicationName);
+    public static readonly string SystemTemporaryFolderPath = Path.Combine(Path.GetTempPath(), TeaPieFolderName);
+
+    public const string TeaPieFolderName = ".teapie";
 }

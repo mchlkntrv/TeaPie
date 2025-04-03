@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using TeaPie.Reporting;
 using TeaPie.StructureExploration;
+using TeaPie.StructureExploration.Paths;
 using TeaPie.TestCases;
 
 namespace TeaPie;
@@ -24,14 +25,18 @@ internal class ApplicationContext(
 
     public string InitializationScriptPath = options.InitializationScriptPath;
 
+    public bool CacheVariables = options.CacheVariables;
+
     public string StructureName => System.IO.Path.GetFileNameWithoutExtension(Path).TrimSuffix(Constants.RequestSuffix);
+
+    public string TeaPieFolderPath { get; internal set; } = string.Empty;
 
     public IReadOnlyCollectionStructure CollectionStructure { get; set; } = new CollectionStructure();
     public IReadOnlyCollection<TestCase> TestCases => CollectionStructure.TestCases;
 
     private readonly Dictionary<string, Script> _userDefinedScripts = [];
     public IReadOnlyDictionary<string, Script> UserDefinedScripts => _userDefinedScripts;
-    public void RegisterUserDefinedScript(string key, Script script) => _userDefinedScripts.Add(key, script);
+    public void RegisterUserDefinedScript(string path, Script script) => _userDefinedScripts.Add(path, script);
 
     public ILogger Logger { get; set; } = logger;
 
@@ -47,4 +52,6 @@ internal class ApplicationContext(
     }
 
     public ITestResultsSummaryReporter Reporter { get; } = reporter;
+
+    public PrematureTermination? PrematureTermination { get; set; }
 }

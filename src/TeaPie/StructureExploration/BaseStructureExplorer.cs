@@ -1,8 +1,9 @@
 ﻿using Microsoft.Extensions.Logging;
+using TeaPie.StructureExploration.Paths;
 
 namespace TeaPie.StructureExploration;
 
-internal abstract class BaseStructureExplorer(ILogger logger) : IStructureExplorer
+internal abstract class BaseStructureExplorer(IPathProvider pathProvider, ILogger logger) : IStructureExplorer
 {
     public const string RemoteFolderName = "~Remote";
     protected string _remoteFolderPath = string.Empty;
@@ -10,6 +11,7 @@ internal abstract class BaseStructureExplorer(ILogger logger) : IStructureExplor
     protected readonly ILogger _logger = logger;
     protected string? _environmentFileName;
     protected string? _initializationScriptName;
+    protected IPathProvider _pathProvider = pathProvider;
 
     public IReadOnlyCollectionStructure Explore(ApplicationContext applicationContext)
     {
@@ -25,12 +27,16 @@ internal abstract class BaseStructureExplorer(ILogger logger) : IStructureExplor
     }
 
     protected void InitializeStructure(
-        string rootPath, string collectionName, out Folder rootFolder, out CollectionStructure collectionStructure)
+        string rootPath,
+        string collectionName,
+        out Folder rootFolder,
+        out Folder teaPieFolder,
+        out CollectionStructure collectionStructure)
     {
         rootFolder = new(rootPath, collectionName, collectionName, null);
         collectionStructure = new CollectionStructure(rootFolder);
 
-        RegisterRemoteFolder(rootPath, collectionName, rootFolder, collectionStructure);
+        teaPieFolder = RegisterTeaPieFolder(collectionName, rootFolder, collectionStructure);
     }
 
     protected static void UpdateContext(ApplicationContext applicationContext, CollectionStructure collectionStructure)
@@ -47,6 +53,12 @@ internal abstract class BaseStructureExplorer(ILogger logger) : IStructureExplor
     }
 
     #region Exploration
+
+    protected void ExploreTeaPieFolder(Folder teaPieFolder, CollectionStructure collectionStructure)
+    {
+        var files = GetFiles(teaPieFolder);
+        SearchForOptionalFilesIfNeeded(teaPieFolder, collectionStructure, files);
+    }
 
     protected static void ExploreTestCase(
         string testCasePath,
@@ -80,14 +92,14 @@ internal abstract class BaseStructureExplorer(ILogger logger) : IStructureExplor
     protected void CheckAndResolveArguments(ApplicationContext applicationContext)
     {
         ValidatePath(applicationContext.Path);
-        CheckAndResolveEnvironmentFile(applicationContext.Path, applicationContext.EnvironmentFilePath);
+        CheckAndResolveEnvironmentFile(applicationContext.EnvironmentFilePath);
         CheckAndResolveInitializationScript(applicationContext.InitializationScriptPath);
     }
 
-    protected void CheckAndResolveEnvironmentFile(string path, string environmentFilePath)
+    protected void CheckAndResolveEnvironmentFile(string environmentFilePath)
         => CheckAndResolveOptionalFile(
             ref _environmentFileName,
-            GetEnvironmentFileName(path),
+            Constants.DefaultEnvironmentFileName + Constants.EnvironmentFileExtension,
             environmentFilePath,
             "environment file");
 
@@ -126,7 +138,7 @@ internal abstract class BaseStructureExplorer(ILogger logger) : IStructureExplor
     {
         var file = files.FirstOrDefault(
             f => Path.GetFileName(f).Equals(GetRelatedScriptFileName(requestFileName, desiredSuffix)));
-        return file is not null ? new Script(File.Create(file, folder)) : null;
+        return file is not null ? new Script(InternalFile.Create(file, folder)) : null;
     }
 
     private static string GetRelatedScriptFileName(string requestFileName, string desiredSuffix)
@@ -137,21 +149,18 @@ internal abstract class BaseStructureExplorer(ILogger logger) : IStructureExplor
         Folder currentFolder,
         out string fileName,
         out string relativePath,
-        out File requestFileObj,
+        out InternalFile requestFileObj,
         string reqFile)
     {
         fileName = Path.GetFileName(reqFile);
         relativePath = GetRelativePath(currentFolder, fileName);
-        requestFileObj = new(reqFile, relativePath, fileName, currentFolder);
+        requestFileObj = new(reqFile, relativePath, currentFolder);
 
         return new TestCase(requestFileObj);
     }
 
     protected static string GetRelativePath(Folder parentFolder, string folderName)
         => Path.Combine(parentFolder.RelativePath, folderName);
-
-    protected static string GetEnvironmentFileName(string path)
-        => Path.GetFileNameWithoutExtension(path) + Constants.EnvironmentFileSuffix + Constants.EnvironmentFileExtension;
 
     #endregion
 
@@ -182,7 +191,7 @@ internal abstract class BaseStructureExplorer(ILogger logger) : IStructureExplor
             files,
             file => collectionStructure.SetInitializationScript(new Script(file)));
 
-    protected static void SearchForOptionalFileIfNeeded(
+    protected void SearchForOptionalFileIfNeeded(
         string? fileName,
         bool fileExistsInCollection,
         Folder parentFolder,
@@ -195,8 +204,30 @@ internal abstract class BaseStructureExplorer(ILogger logger) : IStructureExplor
 
             if (foundFile is not null)
             {
-                setFileAction(File.Create(foundFile, parentFolder));
+                var file = GetFile(foundFile, parentFolder);
+                setFileAction(file);
             }
+        }
+    }
+
+    private File GetFile(string foundFile, Folder parentFolder)
+        => File.BelongsTo(foundFile, _pathProvider.RootPath)
+            ? InternalFile.Create(foundFile, parentFolder)
+            : GetExternalFile(foundFile);
+
+    private ExternalFile GetExternalFile(string foundFile)
+    {
+        if (File.BelongsTo(foundFile, _pathProvider.TeaPieFolderPath))
+        {
+            return new ExternalFile(foundFile)
+            {
+                RelativePath =
+                    Path.Combine(_pathProvider.StructureName, Constants.TeaPieFolderName, Path.GetFileName(foundFile))
+            };
+        }
+        else
+        {
+            return new ExternalFile(foundFile);
         }
     }
 
@@ -206,19 +237,26 @@ internal abstract class BaseStructureExplorer(ILogger logger) : IStructureExplor
 
     protected static Folder RegisterFolder(Folder currentFolder, CollectionStructure collectionStructure, string subFolderPath)
     {
-        var subFolderName = Path.GetFileName(subFolderPath.RemoveSlashAtTheEnd());
+        var subFolderName = Path.GetFileName(subFolderPath.TrimSlashAtTheEnd());
         Folder subFolder = new(subFolderPath, GetRelativePath(currentFolder, subFolderName), subFolderName, currentFolder);
 
         collectionStructure.TryAddFolder(subFolder);
 
         return subFolder;
     }
-    protected void RegisterRemoteFolder(
-        string rootPath, string collectionName, Folder rootFolder, CollectionStructure collectionStructure)
+
+    protected Folder RegisterTeaPieFolder(
+        string collectionName, Folder rootFolder, CollectionStructure collectionStructure)
     {
-        _remoteFolderPath = Path.Combine(rootPath, RemoteFolderName);
-        collectionStructure.TryAddFolder(
-            new Folder(_remoteFolderPath, Path.Combine(collectionName, RemoteFolderName), RemoteFolderName, rootFolder));
+        var teaPieFolder =
+            new Folder(
+                _pathProvider.TeaPieFolderPath,
+                Path.Combine(collectionName, Constants.TeaPieFolderName),
+                Constants.TeaPieFolderName,
+                rootFolder);
+
+        collectionStructure.TryAddFolder(teaPieFolder);
+        return teaPieFolder;
     }
 
     protected void RegisterOptionalFilesIfNeeded(ApplicationContext applicationContext, CollectionStructure collectionStructure)
@@ -249,18 +287,18 @@ internal abstract class BaseStructureExplorer(ILogger logger) : IStructureExplor
         string? fileName,
         string filePath,
         CollectionStructure collectionStructure,
-        Action<File> setFileAction,
+        Action<InternalFile> setFileAction,
         string fileNameForErrorMessage)
     {
         if (fileName is null)
         {
             if (!collectionStructure.TryGetFolder(filePath, out var folder) &&
-                !collectionStructure.TryGetFolder(_remoteFolderPath, out folder))
+                !collectionStructure.TryGetFolder(_pathProvider.TeaPieFolderPath, out folder))
             {
                 throw new InvalidOperationException($"Unable to find parent folder of {fileNameForErrorMessage}.");
             }
 
-            setFileAction(File.Create(filePath, folder));
+            setFileAction(InternalFile.Create(filePath, folder));
         }
     }
 

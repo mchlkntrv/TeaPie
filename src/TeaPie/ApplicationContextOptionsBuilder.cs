@@ -7,10 +7,11 @@ internal class ApplicationContextOptionsBuilder
     private string _environmentFilePath = string.Empty;
     private string _reportFilePath = string.Empty;
     private string _initializationScriptPath = string.Empty;
+    private bool _variablesCaching = true;
 
     public ApplicationContextOptionsBuilder SetTempFolderPath(string? tempPath)
     {
-        _tempFolderPath = string.IsNullOrEmpty(tempPath) ? Constants.DefaultTemporaryFolderPath : tempPath;
+        _tempFolderPath = tempPath ?? string.Empty;
         return this;
     }
 
@@ -38,14 +39,21 @@ internal class ApplicationContextOptionsBuilder
         return this;
     }
 
+    public ApplicationContextOptionsBuilder SetVariablesCaching(bool cacheVariables)
+    {
+        _variablesCaching = cacheVariables;
+        return this;
+    }
+
     public ApplicationContextOptions Build()
     {
         return new ApplicationContextOptions(
-            _tempFolderPath ?? Constants.DefaultTemporaryFolderPath,
+            _tempFolderPath ?? Constants.SystemTemporaryFolderPath,
             _environment,
             _environmentFilePath,
             _reportFilePath,
-            _initializationScriptPath
+            _initializationScriptPath,
+            _variablesCaching
         );
     }
 }

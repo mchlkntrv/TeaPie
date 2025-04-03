@@ -22,7 +22,7 @@
     <None Update="Demo\Environments\CollectionWithoutEnvironment\.placeholder">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Demo\Environments\Environments-env.json">
+    <None Update="Demo\Environments\env.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Demo\Requests\DELETE.http">
@@ -218,6 +218,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Demo\Structure\ZeroLevelTest-test.csx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Demo\Variables\.placeholder">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
