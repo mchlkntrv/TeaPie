@@ -12,7 +12,8 @@ internal sealed class InitCommand : Command<InitCommand.Settings>
     [
         $"{Environment.NewLine}# TeaPie",
         "**/.teapie/cache/",
-        "**/.teapie/reports/"
+        "**/.teapie/reports/",
+        "**/.teapie/runs/"
     ];
 
     public override int Execute(CommandContext context, Settings settings)
@@ -48,7 +49,7 @@ internal sealed class InitCommand : Command<InitCommand.Settings>
         {
             if (Directory.Exists(Path.Combine(currentFolder.FullName, SearchingClue)))
             {
-                AnsiConsole.MarkupLine("[green]Repository root was found on path '" + currentFolder.FullName.EscapeMarkup() +
+                AnsiConsole.MarkupLine("[green]Repository root was found at path '" + currentFolder.FullName.EscapeMarkup() +
                     "'.[/]");
                 return currentFolder.FullName;
             }
@@ -64,7 +65,7 @@ internal sealed class InitCommand : Command<InitCommand.Settings>
         if (!Directory.Exists(path))
         {
             Directory.CreateDirectory(path);
-            AnsiConsole.MarkupLine("[green]Folder was created on path '" + path.EscapeMarkup() +
+            AnsiConsole.MarkupLine("[green]Folder was created at path '" + path.EscapeMarkup() +
                 "', because it didn't existed before.[/]");
         }
     }
@@ -75,7 +76,7 @@ internal sealed class InitCommand : Command<InitCommand.Settings>
         if (!File.Exists(gitignorePath))
         {
             File.Create(gitignorePath);
-            AnsiConsole.MarkupLine("[green]File '.gitignore' was created on path '" + gitignorePath.EscapeMarkup() +
+            AnsiConsole.MarkupLine("[green]File '.gitignore' was created at path '" + gitignorePath.EscapeMarkup() +
                 "', because it didn't existed before.[/]");
         }
 
@@ -118,7 +119,7 @@ internal sealed class InitCommand : Command<InitCommand.Settings>
         if (!Directory.Exists(teaPieFolderPath))
         {
             Directory.CreateDirectory(teaPieFolderPath);
-            AnsiConsole.MarkupLine("[green]TeaPie folder '.teapie' was created on path '" + teaPieFolderPath.EscapeMarkup() +
+            AnsiConsole.MarkupLine("[green]TeaPie folder '.teapie' was created at path '" + teaPieFolderPath.EscapeMarkup() +
                 "'.[/]");
         }
     }
@@ -126,7 +127,7 @@ internal sealed class InitCommand : Command<InitCommand.Settings>
     public sealed class Settings : LoggingSettings
     {
         [CommandArgument(0, "[path]")]
-        [Description("Path on which .teapie folder should be created. If not specified, it attempts to find root of repository " +
+        [Description("Path at which .teapie folder should be created. If not specified, it attempts to find root of repository " +
             "(the one containing '.git' folder).")]
         public string? Path { get; init; }
     }

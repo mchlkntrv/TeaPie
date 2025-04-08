@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using TeaPie.Logging;
 using TeaPie.StructureExploration.Paths;
 
 namespace TeaPie.StructureExploration;
@@ -19,9 +20,12 @@ internal abstract class BaseStructureExplorer(IPathProvider pathProvider, ILogge
 
         LogStart(applicationContext.Path);
 
-        var collectionStructure = ExploreStructure(applicationContext);
+        long elapsedTime = 0;
+        var collectionStructure = Logging.Timer.Execute(
+            () => ExploreStructure(applicationContext),
+            realTime => elapsedTime = realTime);
 
-        LogEnd(collectionStructure);
+        LogEnd(collectionStructure, elapsedTime.ToHumanReadableTime());
 
         return collectionStructure;
     }
@@ -77,7 +81,7 @@ internal abstract class BaseStructureExplorer(IPathProvider pathProvider, ILogge
 
         if (!collectionStructure.TryAddTestCase(testCase))
         {
-            throw new InvalidOperationException($"Unable to register same test-case twice. {testCase.RequestsFile.Path}");
+            throw new InvalidOperationException($"Unable to register same test case twice. {testCase.RequestsFile.Path}");
         }
     }
 
@@ -119,7 +123,7 @@ internal abstract class BaseStructureExplorer(IPathProvider pathProvider, ILogge
         }
         else if (!System.IO.File.Exists(filePath))
         {
-            throw new InvalidOperationException($"Specified {fileName} on path '{filePath}' does not exist.");
+            throw new InvalidOperationException($"Specified {fileName} at path '{filePath}' does not exist.");
         }
     }
 
@@ -180,7 +184,8 @@ internal abstract class BaseStructureExplorer(IPathProvider pathProvider, ILogge
             collectionStructure.HasEnvironmentFile,
             parentFolder,
             files,
-            collectionStructure.SetEnvironmentFile);
+            collectionStructure.SetEnvironmentFile,
+            "environment file");
 
     protected void SearchForInitializationScriptIfNeeded(
         Folder parentFolder, IList<string> files, CollectionStructure collectionStructure)
@@ -189,14 +194,16 @@ internal abstract class BaseStructureExplorer(IPathProvider pathProvider, ILogge
             collectionStructure.HasInitializationScript,
             parentFolder,
             files,
-            file => collectionStructure.SetInitializationScript(new Script(file)));
+            file => collectionStructure.SetInitializationScript(new Script(file)),
+            "initialization script");
 
     protected void SearchForOptionalFileIfNeeded(
         string? fileName,
         bool fileExistsInCollection,
         Folder parentFolder,
         IList<string> files,
-        Action<File> setFileAction)
+        Action<File> setFileAction,
+        string fileNameForLog)
     {
         if (fileName is not null && !fileExistsInCollection)
         {
@@ -206,6 +213,7 @@ internal abstract class BaseStructureExplorer(IPathProvider pathProvider, ILogge
             {
                 var file = GetFile(foundFile, parentFolder);
                 setFileAction(file);
+                _logger.LogDebug("{fileName} was found at path '{Path}'", fileNameForLog, file.Path);
             }
         }
     }
@@ -255,7 +263,11 @@ internal abstract class BaseStructureExplorer(IPathProvider pathProvider, ILogge
                 Constants.TeaPieFolderName,
                 rootFolder);
 
-        collectionStructure.TryAddFolder(teaPieFolder);
+        if (collectionStructure.TryAddFolder(teaPieFolder))
+        {
+            _logger.LogDebug("{FolderName} folder was found at path '{Path}'.", teaPieFolder.Name, teaPieFolder.Path);
+        }
+
         return teaPieFolder;
     }
 
@@ -288,17 +300,18 @@ internal abstract class BaseStructureExplorer(IPathProvider pathProvider, ILogge
         string filePath,
         CollectionStructure collectionStructure,
         Action<InternalFile> setFileAction,
-        string fileNameForErrorMessage)
+        string fileNameForLogger)
     {
         if (fileName is null)
         {
             if (!collectionStructure.TryGetFolder(filePath, out var folder) &&
                 !collectionStructure.TryGetFolder(_pathProvider.TeaPieFolderPath, out folder))
             {
-                throw new InvalidOperationException($"Unable to find parent folder of {fileNameForErrorMessage}.");
+                throw new InvalidOperationException($"Unable to find parent folder of {fileNameForLogger}.");
             }
 
             setFileAction(InternalFile.Create(filePath, folder));
+            _logger.LogDebug("{FileName} was registered, found at path '{Path}'.", fileNameForLogger, filePath);
         }
     }
 
@@ -308,7 +321,7 @@ internal abstract class BaseStructureExplorer(IPathProvider pathProvider, ILogge
 
     protected abstract void LogStart(string path);
 
-    protected abstract void LogEnd(CollectionStructure structure);
+    protected abstract void LogEnd(CollectionStructure structure, string duration);
 
     #endregion
 }

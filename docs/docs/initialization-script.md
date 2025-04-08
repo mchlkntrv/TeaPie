@@ -5,7 +5,7 @@
 | **Definition**       | A `.csx` file that initializes essential components before a test case or collection run. |
 | **Naming Convention** | `init.csx` *(can be customized if explicitly specified)* |
 | **Purpose**         | Sets up necessary configurations before executing (the first) test case. |
-| **Example Usage**   | [Demo Initialization Script](https://github.com/Kros-sk/TeaPie/blob/master/demo/init.csx) |
+| **Example Usage**   | [Demo Initialization Script](https://github.com/Kros-sk/TeaPie/blob/master/demo/.teapie/init.csx) |
 
 ## Specification
 
@@ -17,7 +17,7 @@ This script is used for **pre-test setup**, including:
 - Configuring [**logging**](logging.md)
 - Other necessary pre-execution tasks
 
-By default, TeaPie **automatically detects** and executes the **first `init.csx` script** found in the **collection or parent folder of the test case**.
+By default, TeaPie **automatically detects** and executes the **first `init.csx` script** found in the **.teapie folder, collection folder or parent folder of the test case**.
 
 ### **Custom Initialization Script**
 
