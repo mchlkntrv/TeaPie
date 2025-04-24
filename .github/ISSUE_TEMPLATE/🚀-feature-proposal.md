@@ -1,7 +1,7 @@
 ---
 name: "\U0001F680 Feature Proposal"
 about: Suggest an idea for this project
-title: "[NEW]"
+title: "\U0001F680 [NEW]"
 labels: enhancement, proposal
 assignees: ''
 

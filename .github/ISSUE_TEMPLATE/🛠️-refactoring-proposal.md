@@ -1,7 +1,7 @@
 ---
 name: "\U0001F6E0️ Refactoring Proposal"
 about: Suggest a refactoring
-title: "[REF]"
+title: "\U0001F6E0️ [REF]"
 labels: proposal, refactoring
 assignees: ''
 
