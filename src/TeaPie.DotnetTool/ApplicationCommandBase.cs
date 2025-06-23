@@ -6,10 +6,6 @@ internal abstract class ApplicationCommandBase<TSettings> : AsyncCommand<TSettin
 {
     public override async Task<int> ExecuteAsync(CommandContext context, TSettings settings)
     {
-        if (!settings.ShowNoLogo)
-        {
-            Displayer.DisplayApplicationHeader();
-        }
         return await BuildApplication(settings).Run(new CancellationToken());
     }
 

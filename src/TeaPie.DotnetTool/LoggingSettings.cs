@@ -34,9 +34,4 @@ internal class LoggingSettings : CommandSettings
     [DefaultValue(false)]
     [Description("Runs command silently, without displaying any output. Default: false.")]
     public bool IsQuiet { get; init; }
-
-    [CommandOption("--no-logo")]
-    [DefaultValue(false)]
-    [Description("Disables display of the TeaPie figlet logo.")]
-    public bool ShowNoLogo { get; init; }
 }
