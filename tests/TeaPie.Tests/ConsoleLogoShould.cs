@@ -60,9 +60,18 @@ public class ConsoleLogoShould
 
     private static string CreateExpectedOutput()
     {
-        var expectedTable = Displayer.RenderTable();
         var expectedConsole = new TestConsole();
-        expectedConsole.Write(expectedTable);
-        return expectedConsole.Output;
+        var originalConsole = AnsiConsole.Console;
+        AnsiConsole.Console = expectedConsole;
+
+        try
+        {
+            Displayer.DisplayApplicationHeader();
+            return expectedConsole.Output;
+        }
+        finally
+        {
+            AnsiConsole.Console = originalConsole;
+        }
     }
 }
