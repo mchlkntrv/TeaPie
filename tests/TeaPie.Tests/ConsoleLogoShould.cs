@@ -19,7 +19,10 @@ public class ConsoleLogoShould
         using (var stream = assembly.GetManifestResourceStream(resourceName))
         {
             if (stream == null)
+            {
                 throw new Exception($"Resource '{resourceName}' not found. Available: {string.Join(", ", assembly.GetManifestResourceNames())}");
+            }
+
             font = FigletFont.Load(stream);
         }
 
