@@ -1,21 +1,12 @@
-﻿namespace TeaPie.DotnetTool;
+﻿using TeaPie.DotnetTool;
 
-public static class Program
+var app = ApplicationProvider.GetApplication();
+
+if (!args.Contains("--no-logo"))
 {
-    public static async Task<int> RunAsync(string[] args)
-    {
-        var app = ApplicationProvider.GetApplication();
-
-        if (!args.Contains("--no-logo"))
-        {
-            Displayer.DisplayApplicationHeader();
-        }
-
-        return await app.RunAsync(args);
-    }
-
-    public static async Task Main(string[] args)
-    {
-        await RunAsync(args);
-    }
+    Displayer.DisplayApplicationHeader();
 }
+
+return await app.RunAsync(args);
+
+public partial class Program;
