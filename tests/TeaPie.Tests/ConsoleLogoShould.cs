@@ -7,14 +7,54 @@ namespace TeaPie.Tests;
 public class ConsoleLogoShould
 {
     [Fact]
-    public void BePrintedOut()
+    public async Task BePrintedOut()
     {
         var testConsole = new TestConsole();
         var originalConsole = AnsiConsole.Console;
         AnsiConsole.Console = testConsole;
 
+        var expectedOutput = CreateExpectedOutput();
+
+        try
+        {
+            await Program.Main([]);
+
+            var output = testConsole.Output;
+
+            Assert.Contains(expectedOutput, output);
+        }
+        finally
+        {
+            AnsiConsole.Console = originalConsole;
+        }
+    }
+
+    [Fact]
+    public async Task NotBePrintedOut()
+    {
+        var testConsole = new TestConsole();
+        var originalConsole = AnsiConsole.Console;
+        AnsiConsole.Console = testConsole;
+
+        var expectedOutput = CreateExpectedOutput();
+
+        try
+        {
+            await Program.Main(["--no-logo"]);
+            var output = testConsole.Output;
+
+            Assert.DoesNotContain(expectedOutput, output);
+        }
+        finally
+        {
+            AnsiConsole.Console = originalConsole;
+        }
+    }
+
+    private static string CreateExpectedOutput()
+    {
         var assembly = typeof(Displayer).Assembly;
-        var resourceName = "TeaPie.DotnetTool.Assets.Fonts.small.flf";
+        const string resourceName = "TeaPie.DotnetTool.Assets.Fonts.small.flf";
         FigletFont font;
         using (var stream = assembly.GetManifestResourceStream(resourceName))
         {
@@ -47,19 +87,6 @@ public class ConsoleLogoShould
 
         var expectedConsole = new TestConsole();
         expectedConsole.Write(expectedTable);
-        var expectedOutput = expectedConsole.Output;
-
-        try
-        {
-            Displayer.DisplayApplicationHeader();
-
-            var output = testConsole.Output;
-
-            Assert.Equal(expectedOutput, output);
-        }
-        finally
-        {
-            AnsiConsole.Console = originalConsole;
-        }
+        return expectedConsole.Output;
     }
 }
