@@ -7,15 +7,12 @@ namespace TeaPie.Tests;
 
 public class ConsoleLogoShould
 {
-    private static readonly string[] _noArgs = [];
-    private static readonly string[] _noLogoArg = ["--no-logo"];
-
-    [Fact]
-    public void BePrintedOut()
+    [Theory]
+    [InlineData(new string[0], true)]
+    [InlineData(new string[] { "--no-logo" }, false)]
+    public void BePrintedBasedOnArgs(string[] args, bool shouldPrintLogo)
     {
-        var testConsole = new TestConsole();
-        var originalConsole = AnsiConsole.Console;
-        AnsiConsole.Console = testConsole;
+        var (testConsole, originalConsole) = UseTestConsole();
 
         var expectedOutput = CreateExpectedOutput();
 
@@ -23,55 +20,49 @@ public class ConsoleLogoShould
         {
             var programType = typeof(Program).GetTypeInfo();
             var entryPoint = programType.Assembly.EntryPoint ?? throw new InvalidOperationException("Entry point not found");
-            entryPoint.Invoke(null, [_noArgs]);
+            entryPoint.Invoke(null, [args]);
 
             var output = testConsole.Output;
-            Assert.Contains(expectedOutput, output);
+            if (shouldPrintLogo)
+            {
+                Assert.Contains(expectedOutput, output);
+            }
+            else
+            {
+                Assert.DoesNotContain(expectedOutput, output);
+            }
         }
         finally
         {
-            AnsiConsole.Console = originalConsole;
-        }
-    }
-
-    [Fact]
-    public void NotBePrintedOut()
-    {
-        var testConsole = new TestConsole();
-        var originalConsole = AnsiConsole.Console;
-        AnsiConsole.Console = testConsole;
-
-        var expectedOutput = CreateExpectedOutput();
-
-        try
-        {
-            var programType = typeof(Program).GetTypeInfo();
-            var entryPoint = programType.Assembly.EntryPoint ?? throw new InvalidOperationException("Entry point not found");
-            entryPoint.Invoke(null, [_noLogoArg]);
-
-            var output = testConsole.Output;
-            Assert.DoesNotContain(expectedOutput, output);
-        }
-        finally
-        {
-            AnsiConsole.Console = originalConsole;
+            RestoreConsole(originalConsole);
         }
     }
 
     private static string CreateExpectedOutput()
     {
-        var expectedConsole = new TestConsole();
-        var originalConsole = AnsiConsole.Console;
-        AnsiConsole.Console = expectedConsole;
+        var (testConsole, originalConsole) = UseTestConsole();
 
         try
         {
             Displayer.DisplayApplicationHeader();
-            return expectedConsole.Output;
+            return testConsole.Output;
         }
         finally
         {
-            AnsiConsole.Console = originalConsole;
+            RestoreConsole(originalConsole);
         }
+    }
+
+    private static (TestConsole testConsole, IAnsiConsole originalConsole) UseTestConsole()
+    {
+        var testConsole = new TestConsole();
+        var originalConsole = AnsiConsole.Console;
+        AnsiConsole.Console = testConsole;
+        return (testConsole, originalConsole);
+    }
+
+    private static void RestoreConsole(IAnsiConsole originalConsole)
+    {
+        AnsiConsole.Console = originalConsole;
     }
 }
