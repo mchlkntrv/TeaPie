@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\TeaPie.DotnetTool\TeaPie.DotnetTool.csproj" />
     <ProjectReference Include="..\..\src\TeaPie\TeaPie.csproj" />
   </ItemGroup>
 
@@ -223,6 +224,10 @@
     <None Update="Demo\Variables\.placeholder">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console.Testing" />
   </ItemGroup>
 
 </Project>

@@ -1,5 +1,7 @@
 ﻿using Spectre.Console;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+[assembly: InternalsVisibleTo("TeaPie.Tests")]
 
 namespace TeaPie.DotnetTool;
 

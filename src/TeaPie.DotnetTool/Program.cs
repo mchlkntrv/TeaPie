@@ -2,6 +2,11 @@
 
 var app = ApplicationProvider.GetApplication();
 
-Displayer.DisplayApplicationHeader();
+if (!args.Contains("--no-logo"))
+{
+    Displayer.DisplayApplicationHeader();
+}
 
 return await app.RunAsync(args);
+
+public partial class Program;

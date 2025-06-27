@@ -12,12 +12,13 @@ On this page you can check all currently available commands with their arguments
 **Full Syntax:**
 
 ```sh
-teapie cache clear [-g|--glob|--global]
+teapie cache clear [-g|--glob|--global] [--no-logo]
 ```
 
 | **Option** | **Meaning** | **Default value** |
 |------------|-------------|-------------------|
 | `-g`, `--glob`, `--global` | Indicates whether global cache folder (in system temporary folder) should be deleted.  | `false` |
+| `--no-logo` | If set, the logo will not be displayed. | `false` |
 
 ## `compile` command
 
@@ -29,7 +30,7 @@ teapie cache clear [-g|--glob|--global]
 **Full Syntax:**
 
 ```sh
-teapie compile <path> [--log-file <file>] [--log-file-log-level <level>] [-l|--log-level <level>] [-d|--debug] [-v|--verbose] [-q|--quiet]
+teapie compile <path> [--log-file <file>] [--log-file-log-level <level>] [-l|--log-level <level>] [-d|--debug] [-v|--verbose] [-q|--quiet] [--no-logo]
 ```
 
 | **Argument** | **Meaning** | **Mandatory** |
@@ -45,6 +46,7 @@ teapie compile <path> [--log-file <file>] [--log-file-log-level <level>] [-l|--l
 | `-v`, `--verbose` | Displays all available information, including debug details. | `false` |
 | `-q`, `--quiet` | Runs the command silently, without displaying any output. | `false` |
 | `-h`, `--help` | Prints help information. | – |
+| `--no-logo` | If set, the logo will not be displayed. | `false` |
 
 ## `explore` command
 
@@ -56,7 +58,7 @@ teapie compile <path> [--log-file <file>] [--log-file-log-level <level>] [-l|--l
 **Full Syntax:**
 
 ```sh
-teapie explore [path] [--log-file <file>] [--log-file-log-level <level>] [-l|--log-level <level>] [-d|--debug] [-v|--verbose] [-q|--quiet] [--env-file <file>] [--init-script <script>]
+teapie explore [path] [--log-file <file>] [--log-file-log-level <level>] [-l|--log-level <level>] [-d|--debug] [-v|--verbose] [-q|--quiet] [--env-file <file>] [--init-script <script>] [--no-logo]
 ```
 
 | **Argument** | **Meaning** | **Mandatory** |
@@ -74,6 +76,7 @@ teapie explore [path] [--log-file <file>] [--log-file-log-level <level>] [-l|--l
 | `--env-file` | Path to the environment definition file. If not provided, the tool will use the first matching `env.json` file found in `.teapie` folder or the collection (respectively parent folder of test case). | Auto-detected |
 | `-i`, `--init-script` | Path to an initialization script to be run before the first test case. If not provided, `init.csx` will be auto-discovered in the `.teapie` folder or the collection (respectively parent folder of test case). | Auto-detected |
 | `-h`, `--help` | Prints help information. | – |
+| `--no-logo` | If set, the logo will not be displayed. | `false` |
 
 ## `generate` command
 
@@ -85,7 +88,7 @@ teapie explore [path] [--log-file <file>] [--log-file-log-level <level>] [-l|--l
 **Full Syntax:**
 
 ```sh
-teapie generate <test-case-name> [path] [-i|--init|--pre-request] [-t|--test|--post-response]
+teapie generate <test-case-name> [path] [-i|--init|--pre-request] [-t|--test|--post-response] [--no-logo]
 ```
 
 | **Argument** | **Meaning** | **Mandatory** |
@@ -98,6 +101,7 @@ teapie generate <test-case-name> [path] [-i|--init|--pre-request] [-t|--test|--p
 | `-i`, `--init`, `--pre-request` | If given (`true`) generates **pre-request script** `<test-case-name>-init.csx` | `false` |
 | `-t`, `--test`, `--post-response` | If given (`true`) generates **post-response script** script `<test-case-name>-test.csx` | `false` |
 | `-h`, `--help` | Prints help information. | – |
+| `--no-logo` | If set, the logo will not be displayed. | `false` |
 
 ## `init` command
 
@@ -109,12 +113,16 @@ teapie generate <test-case-name> [path] [-i|--init|--pre-request] [-t|--test|--p
 **Full Syntax:**
 
 ```sh
-teapie init [path-to-teapie-folder]
+teapie init [path-to-teapie-folder] [--no-logo]
 ```
 
 | **Argument** | **Meaning** | **Mandatory** |
 |------------|-------------|-------------------|
 | `path` | Optional parameter which specifies at which path `.teapie` folder should be created. If no such parameter is provided, attempt to find root of repository is performed. | `false` |
+
+| **Option** | **Meaning** | **Default value** |
+|------------|-------------|-------------------|
+| `--no-logo` | If set, the logo will not be displayed. | `false` |
 
 ## `test` command
 
@@ -126,7 +134,7 @@ teapie init [path-to-teapie-folder]
 **Full Syntax:**
 
 ```sh
-teapie test [path] [--temp-path <path>] [-e|--env <envName>] [--env-file <file>] [-r|--report-file <file>] [-i|--init-script <script>] [--no-cache-vars] [--log-file <file>] [--log-file-log-level <level>] [-l|--log-level <level>] [-d|--debug] [-v|--verbose] [-q|--quiet]
+teapie test [path] [--temp-path <path>] [-e|--env <envName>] [--env-file <file>] [-r|--report-file <file>] [-i|--init-script <script>] [--no-cache-vars] [--log-file <file>] [--log-file-log-level <level>] [-l|--log-level <level>] [-d|--debug] [-v|--verbose] [-q|--quiet] [--no-logo]
 ```
 
 | **Argument** | **Meaning** | **Mandatory** |
@@ -148,3 +156,4 @@ teapie test [path] [--temp-path <path>] [-e|--env <envName>] [--env-file <file>]
 | `-v`, `--verbose` | Displays all available information, including debug details. | `false` |
 | `-q`, `--quiet` | Runs the command silently, without displaying any output. | `false` |
 | `-h`, `--help` | Prints help information. | – |
+| `--no-logo` | If set, the logo will not be displayed. | `false` |
