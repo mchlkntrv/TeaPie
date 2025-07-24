@@ -34,3 +34,9 @@ jobs:
 
     - name: Run Unit tests
       run: dotnet test --no-build --verbosity normal --configuration Release
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: results.xml   # Change this if your test report has a different filename/path
