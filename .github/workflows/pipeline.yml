@@ -33,10 +33,10 @@ jobs:
       run: dotnet build --configuration Release --no-restore -warnaserror
 
     - name: Run Unit tests
-      run: dotnet test --no-build --verbosity normal --configuration Release
+      run: dotnet test --no-build --verbosity normal --configuration Release --logger "trx;LogFileName=results.trx"
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
       with:
         name: test-results
-        path: results.xml   # Change this if your test report has a different filename/path
+        path: '**/results.trx'
