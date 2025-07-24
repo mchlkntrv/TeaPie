@@ -1,0 +1,32 @@
+name: Test Custom JUnit XML
+
+on:
+  workflow_dispatch:
+
+jobs:
+  junit-custom-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create custom JUnit XML
+        run: |
+          mkdir -p test-results
+          echo '<?xml version="1.0" encoding="UTF-8"?>
+          <testsuite tests="1" failures="0" name="ExampleSuite">
+            <testcase classname="ExampleClass" name="exampleTest" time="0.001" source="inline" request="EditCarRequest"/>
+          </testsuite>' > test-results/custom-junit.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results
+          path: test-results/custom-junit.xml
+
+      - name: Report JUnit results (optional)
+        uses: dorny/test-reporter@v1
+        with:
+          name: JUnit Tests
+          path: test-results/custom-junit.xml
+          reporter: java-junit
