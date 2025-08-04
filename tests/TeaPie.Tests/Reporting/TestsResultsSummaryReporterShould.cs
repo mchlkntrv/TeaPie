@@ -49,9 +49,22 @@ public partial class TestResultsSummaryReporterShould
     {
         var accessor = new TestResultsSummaryAccessor() { Summary = new CollectionTestResultsSummary() };
         var reporter = new TestResultsSummaryReporter(accessor);
-        var skippedTestResult = new TestResult.NotRun() { TestName = "Ignored Test" };
-        var passedTestResult = new TestResult.Passed(20) { TestName = "Passed Test" };
-        var failedTestResult = new TestResult.Failed(10, "Unknown reason.", null) { TestName = "Failed Test" };
+        var skippedTestResult = new TestResult.NotRun()
+        {
+            TestName = "Ignored Test",
+            SourceType = "csx"
+        };
+        var passedTestResult = new TestResult.Passed(20)
+        {
+            TestName = "Passed Test",
+            SourceType = "csx"
+        };
+        var failedTestResult = new TestResult.Failed(10, "Unknown reason.", null)
+        {
+            TestName = "Failed Test",
+            SourceType = "inline",
+            RequestName = "SomeRequest"
+        };
 
         reporter.Initialize();
         reporter.RegisterTestResult("test-case", skippedTestResult);
