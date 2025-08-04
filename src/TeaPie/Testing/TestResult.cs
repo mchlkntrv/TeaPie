@@ -11,6 +11,6 @@ public partial record TestResult
 
     public required string TestName { get; init; }
     public string TestCasePath { get; init; }
-    public required string SourceType { get; init; } // "inline" or "csx"
-    public string? RequestName { get; init; } // Only for inline tests
+    public required string SourceType { get; init; }
+    public string? RequestName { get; init; }
 }

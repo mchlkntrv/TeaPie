@@ -127,18 +127,22 @@ public class JUnitXmlTestResultsSummaryReporterShould
     private static CollectionTestResultsSummary CreateMockTestSummary()
     {
         var summary = new CollectionTestResultsSummary();
-        summary.AddPassedTest("SampleTestCase", new TestResult.Passed(150) { TestName = "Test1" });
-        summary.AddFailedTest(
-            "SampleTestCase",
-            new TestResult.Failed(
-                200,
-                _exception.Message,
-                _exception
-            )
-            {
-                TestName = "Test2"
-            });
-        summary.AddSkippedTest("SampleTestCase", new TestResult.NotRun() { TestName = "Test3" });
+        summary.AddPassedTest("SampleTestCase", new TestResult.Passed(150)
+        {
+            TestName = "Test1",
+            SourceType = "csx"
+        });
+        summary.AddFailedTest("SampleTestCase", new TestResult.Failed(200, _exception.Message, _exception)
+        {
+            TestName = "Test2",
+            SourceType = "inline",
+            RequestName = "SomeRequest"
+        });
+        summary.AddSkippedTest("SampleTestCase", new TestResult.NotRun()
+        {
+            TestName = "Test3",
+            SourceType = "csx"
+        });
 
         summary.Start();
 
