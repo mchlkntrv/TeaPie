@@ -46,7 +46,9 @@ internal class TestFactory : ITestFactory
             new TestResult.NotRun()
             {
                 TestName = testName,
-                TestCasePath = testCase?.RequestsFile.RelativePath ?? string.Empty
+                TestCasePath = testCase?.RequestsFile.RelativePath ?? string.Empty,
+                SourceType = "inline",
+                RequestName = testCase?.Name
             },
             testCase);
 

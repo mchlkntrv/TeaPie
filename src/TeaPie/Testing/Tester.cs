@@ -35,10 +35,18 @@ internal partial class Tester(
         StartRunIfFirstTest();
         var testCase = _testCaseExecutionContextAccessor.Context.TestCase;
 
+        var (sourceType, requestName) = GetTestMetadata(testName, testCaseExecutionContext, testCase);
+
         var test = new Test(
             testName,
             testFunction,
-            new TestResult.NotRun() { TestName = testName, TestCasePath = testCase.RequestsFile.RelativePath },
+            new TestResult.NotRun()
+            {
+                TestName = testName,
+                TestCasePath = testCase.RequestsFile.RelativePath,
+                SourceType = sourceType,
+                RequestName = requestName
+            },
             testCase);
 
         test = await ExecuteOrSkipTest(testName, skipTest, testCaseExecutionContext, test);
@@ -89,10 +97,15 @@ internal partial class Tester(
     {
         _stopWatch.Stop();
 
+        var testCaseExecutionContext = _testCaseExecutionContextAccessor.Context;
+        var (sourceType, requestName) = GetTestMetadata(test.Name, testCaseExecutionContext, testCase);
+
         var result = new TestResult.Failed(_stopWatch.ElapsedMilliseconds, ex.Message, ex)
         {
             TestName = test.Name,
-            TestCasePath = testCase?.RequestsFile.RelativePath ?? string.Empty
+            TestCasePath = testCase?.RequestsFile.RelativePath ?? string.Empty,
+            SourceType = sourceType,
+            RequestName = requestName
         };
         test = test with { Result = result };
         _resultsSummaryReporter.RegisterTestResult(testCase?.Name ?? string.Empty, result);
@@ -117,16 +130,42 @@ internal partial class Tester(
 
         _stopWatch.Stop();
 
+        var testCaseExecutionContext = _testCaseExecutionContextAccessor.Context;
+        var (sourceType, requestName) = GetTestMetadata(test.Name, testCaseExecutionContext, testCase);
+
         var result = new TestResult.Passed(_stopWatch.ElapsedMilliseconds)
         {
             TestName = test.Name,
-            TestCasePath = testCase?.RequestsFile.RelativePath ?? string.Empty
+            TestCasePath = testCase?.RequestsFile.RelativePath ?? string.Empty,
+            SourceType = sourceType,
+            RequestName = requestName
         };
         test = test with { Result = result };
         _resultsSummaryReporter.RegisterTestResult(testCase?.Name ?? string.Empty, result);
 
         LogTestSuccess(test.Name, _stopWatch.ElapsedMilliseconds.ToHumanReadableTime());
         return test;
+    }
+
+    private static (string sourceType, string? requestName) GetTestMetadata(
+        string testName,
+        TestCaseExecutionContext? testCaseExecutionContext,
+        TestCase? testCase)
+    {
+        var isInlineTest = testName.StartsWith('[') && testName.Contains(']');
+        var sourceType = isInlineTest ? "inline" : "csx";
+
+        string? requestName = null;
+        if (isInlineTest && testCaseExecutionContext?.Request != null)
+        {
+            requestName = testCaseExecutionContext.Requests
+                .FirstOrDefault(kvp => ReferenceEquals(kvp.Value, testCaseExecutionContext.Request))
+                .Key;
+
+            requestName ??= testCase?.Name;
+        }
+
+        return (sourceType, requestName);
     }
 
     #endregion
