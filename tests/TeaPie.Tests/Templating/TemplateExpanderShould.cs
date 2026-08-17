@@ -112,6 +112,41 @@ public class TemplateExpanderShould
     }
 
     [Fact]
+    public void PreserveLiteralTextBeforeAndAfterLoopBlockUnchanged()
+    {
+        const string content =
+            "### Setup\n" +
+            "POST {{ApiGatewayBaseUrl}}/init\n\n" +
+            "{% for i in (1..2) %}[{{ i }}]{% endfor %}\n" +
+            "### Teardown\n" +
+            "POST {{ApiGatewayBaseUrl}}/cleanup";
+        var expander = new TemplateExpander(
+            new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(new global::TeaPie.Variables.Variables()));
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Be(
+            "### Setup\n" +
+            "POST {{ApiGatewayBaseUrl}}/init\n\n" +
+            "[1][2]\n" +
+            "### Teardown\n" +
+            "POST {{ApiGatewayBaseUrl}}/cleanup");
+    }
+
+    [Fact]
+    public void ExpandTwoIndependentLoopBlocksSeparatedByLiteralText()
+    {
+        const string content =
+            "{% for a in (1..2) %}A{{ a }}{% endfor %}mid{% for b in (1..2) %}B{{ b }}{% endfor %}";
+        var expander = new TemplateExpander(
+            new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(new global::TeaPie.Variables.Variables()));
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Be("A1A2midB1B2");
+    }
+
+    [Fact]
     public void ExpandDynamicNamingPatternBuiltWithPrependAppendFilters()
     {
         const string content =
