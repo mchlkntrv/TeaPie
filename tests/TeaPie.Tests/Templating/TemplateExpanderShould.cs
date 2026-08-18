@@ -21,6 +21,19 @@ public class TemplateExpanderShould
     }
 
     [Fact]
+    public void ExpandLoopOverDottedCollectionVariableName()
+    {
+        const string content = "{% for partner in Temp.FreePartners %}{{ partner }}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Temp.FreePartners", new List<string> { "01245", "012426", "012427" });
+        var expander = new TemplateExpander(new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(variables));
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Be("01245012426012427");
+    }
+
+    [Fact]
     public void ReturnContentUnchangedWhenNoLoopTagIsPresent()
     {
         const string content = "POST {{ApiGatewayBaseUrl}}/companies\n\n{ \"name\": \"Acme\" }";
@@ -30,6 +43,30 @@ public class TemplateExpanderShould
         var result = expander.Expand(content, "test.http");
 
         result.Should().BeSameAs(content);
+    }
+
+    [Fact]
+    public void ExpandWhitespaceControlLoopOverNumericRangeCorrectly()
+    {
+        const string content = "{%- for x in (1..2) -%}[{{ x }}]{%- endfor -%}";
+        var expander = new TemplateExpander(
+            new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(new global::TeaPie.Variables.Variables()));
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Be("[1][2]");
+    }
+
+    [Fact]
+    public void ThrowWhenStrayEndforTagIsPresentAlongsideAValidLoop()
+    {
+        const string content = "{% for a in (1..2) %}[{{ a }}]{% endfor %}\n{% endfor %}";
+        var expander = new TemplateExpander(
+            new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(new global::TeaPie.Variables.Variables()));
+
+        var act = () => expander.Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*endfor*");
     }
 
     [Fact]

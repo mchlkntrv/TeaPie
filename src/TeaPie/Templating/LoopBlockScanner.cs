@@ -33,22 +33,55 @@ internal sealed partial class LoopBlockScanner : ILoopBlockScanner
                     "Templating error: nested '{% for %}' loops are not supported.");
             }
 
-            var loopVariableName = openMatch.Groups[1].Value;
-            var sourceExpression = openMatch.Groups[2].Value.Trim();
+            var loopVariableName = openMatch.Groups[2].Value;
+            var sourceExpression = openMatch.Groups[3].Value.Trim();
             var body = content[bodyStart..closeMatch.Index];
             var length = closeMatch.Index + closeMatch.Length - openMatch.Index;
+            var trimBodyStart = openMatch.Groups[4].Success;
+            var trimBodyEnd = closeMatch.Groups[1].Success;
 
-            blocks.Add(new LoopBlock(loopVariableName, sourceExpression, body, openMatch.Index, length));
+            blocks.Add(new LoopBlock(
+                loopVariableName, sourceExpression, body, openMatch.Index, length, trimBodyStart, trimBodyEnd));
 
             position = closeMatch.Index + closeMatch.Length;
         }
 
+        EnsureNoResidualForTags(content, blocks);
+
         return blocks;
     }
 
-    [GeneratedRegex(@"\{%\s*for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+(.+?)\s*%\}")]
+    // After the strict scan above, re-scan the whole content for any tag whose keyword is 'for'
+    // or 'endfor' (well-formed or not, with or without leading/trailing '-' whitespace control)
+    // that did not end up inside a recognized block's span. This catches: a stray '{% endfor %}'
+    // with no preceding '{% for %}' (the strict scan above never even starts for that case, so it
+    // would otherwise flow through as literal, silently-unexpanded text); malformed '{% for %}'
+    // syntax (missing 'in', bad variable name); and would also catch a for/endfor tag using
+    // whitespace-control dashes if ForTagRegex/EndForTagRegex above ever stopped recognizing that
+    // form. Anything that isn't a for/endfor-keyword tag (e.g. unrelated '{%' in a JSON payload)
+    // is deliberately left untouched.
+    private static void EnsureNoResidualForTags(string content, List<LoopBlock> blocks)
+    {
+        foreach (Match match in ForTagFamilyRegex().Matches(content))
+        {
+            if (!IsWithinAnyBlock(match.Index, blocks))
+            {
+                throw new InvalidOperationException(
+                    $"Templating error: found a stray or malformed loop tag '{match.Value}' that is not part of " +
+                    "a valid '{% for %}' ... '{% endfor %}' block.");
+            }
+        }
+    }
+
+    private static bool IsWithinAnyBlock(int index, List<LoopBlock> blocks)
+        => blocks.Exists(block => index >= block.StartIndex && index < block.StartIndex + block.Length);
+
+    [GeneratedRegex(@"\{%(-)?\s*for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+(.+?)\s*(-)?%\}")]
     private static partial Regex ForTagRegex();
 
-    [GeneratedRegex(@"\{%\s*endfor\s*%\}")]
+    [GeneratedRegex(@"\{%(-)?\s*endfor\s*(-)?%\}")]
     private static partial Regex EndForTagRegex();
+
+    [GeneratedRegex(@"\{%-?\s*(for|endfor)\b[^%]*-?%\}")]
+    private static partial Regex ForTagFamilyRegex();
 }

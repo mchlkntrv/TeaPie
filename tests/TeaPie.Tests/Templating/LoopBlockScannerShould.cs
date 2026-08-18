@@ -54,4 +54,40 @@ public class LoopBlockScannerShould
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*nested*");
     }
+
+    [Fact]
+    public void ThrowWhenStrayEndforTagHasNoPrecedingForTag()
+    {
+        const string content = "before\n{% endfor %}\nafter";
+        var scanner = new LoopBlockScanner();
+
+        var act = () => scanner.FindLoopBlocks(content);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*endfor*");
+    }
+
+    [Fact]
+    public void ThrowWhenForTagSyntaxIsMalformed()
+    {
+        const string content = "{% for car Cars %}BODY{% endfor %}";
+        var scanner = new LoopBlockScanner();
+
+        var act = () => scanner.FindLoopBlocks(content);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void FindWellFormedWhitespaceControlLoopBlock()
+    {
+        const string content = "{%- for car in Cars -%}BODY{%- endfor -%}";
+        var scanner = new LoopBlockScanner();
+
+        var blocks = scanner.FindLoopBlocks(content);
+
+        blocks.Should().HaveCount(1);
+        blocks[0].LoopVariableName.Should().Be("car");
+        blocks[0].SourceExpression.Should().Be("Cars");
+        blocks[0].Body.Should().Be("BODY");
+    }
 }
