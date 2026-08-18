@@ -1,0 +1,19 @@
+### Pre-check before the follow-up loop (classic request, no loop)
+# @name PreCheck
+## TEST-EXPECT-STATUS: [200]
+GET {{ApiBaseUrl}}/posts/3
+
+{% for partner in CreatedPartners %}
+### Create license for partner {{ partner.PartnerId }}: {{ partner.Name }}
+# @name CreateLicense{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "License for {{ partner.Name }}", "partnerId": {{ partner.PartnerId }} }
+
+{% endfor %}
+### Closing request after the follow-up loop (classic request, no loop)
+# @name Closing
+## TEST-EXPECT-STATUS: [200]
+GET {{ApiBaseUrl}}/posts/4

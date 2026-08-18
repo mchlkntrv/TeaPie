@@ -1,0 +1,25 @@
+{% for product in Products %}
+### Create product {{ forloop.index }}: {{ product.Name }}
+# @name CreateProduct{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "{{ product.Name }}", "type": "product" }
+
+{% endfor %}
+### Plain, non-loop request placed between the two loops
+# @name MidMarker
+## TEST-EXPECT-STATUS: [200]
+GET {{ApiBaseUrl}}/posts/1
+
+{% for category in Categories %}
+### Create category {{ forloop.index }}: {{ category.Name }}
+# @name CreateCategory{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "{{ category.Name }}", "type": "category" }
+
+{% endfor %}

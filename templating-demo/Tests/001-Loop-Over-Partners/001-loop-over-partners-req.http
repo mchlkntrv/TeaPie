@@ -1,0 +1,21 @@
+// Demo of the templating-loop feature: one request block below expands into N
+// independent, fully-reported requests - one per item in the 'Partners'
+// collection set in the -init.csx script. NOTE: avoid writing literal loop-tag
+// syntax inside a comment like this one - the scanner runs on raw file text
+// before comments are stripped, so a comment merely describing the tags would
+// itself be mistaken for a malformed tag.
+//
+// Notice that '{{ApiBaseUrl}}' (TeaPie's own variable, resolved AFTER expansion)
+// survives untouched, while '{{ partner.Name }}' and '{{ forloop.index }}'
+// (Liquid loop-scope expressions, resolved DURING expansion) become real
+// values for each iteration.
+{% for partner in Partners %}
+### Create partner {{ forloop.index }}: {{ partner.Name }}
+# @name CreatePartner{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "{{ partner.Name }}", "body": "Registration ID {{ partner.RegistrationId }}", "userId": {{ forloop.index }} }
+
+{% endfor %}

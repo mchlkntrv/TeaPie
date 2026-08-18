@@ -1,0 +1,30 @@
+### Health check (classic request, no loop involved at all)
+# @name HealthCheck
+## TEST-EXPECT-STATUS: [200]
+GET {{ApiBaseUrl}}/posts/1
+
+{% for partner in Partners %}
+### Create partner {{ forloop.index }}: {{ partner.Name }}
+# @name CreatePartner{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "{{ partner.Name }}", "type": "partner" }
+
+{% endfor %}
+### Batch marker between the two loops (classic request, no loop)
+# @name BatchMarker
+## TEST-EXPECT-STATUS: [200]
+GET {{ApiBaseUrl}}/posts/2
+
+{% for department in Departments %}
+### Create department {{ forloop.index }}: {{ department.Name }}
+# @name CreateDepartment{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "{{ department.Name }}", "type": "department" }
+
+{% endfor %}

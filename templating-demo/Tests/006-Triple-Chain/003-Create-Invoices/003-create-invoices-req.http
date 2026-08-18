@@ -1,0 +1,10 @@
+{% for license in CreatedLicenses %}
+### Create invoice for license {{ license.LicenseId }} ({{ license.CompanyName }})
+# @name CreateInvoice{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "Invoice for {{ license.CompanyName }}", "licenseId": {{ license.LicenseId }}, "companyId": {{ license.CompanyId }} }
+
+{% endfor %}

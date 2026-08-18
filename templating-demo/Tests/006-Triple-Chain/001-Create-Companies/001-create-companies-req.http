@@ -1,0 +1,10 @@
+{% for company in Companies %}
+### Create company {{ forloop.index }}: {{ company.Name }}
+# @name CreateCompany{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "{{ company.Name }}", "userId": {{ forloop.index }} }
+
+{% endfor %}

@@ -1,0 +1,7 @@
+### Normal request, not part of any loop
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "name": "test" }
+
+{% endfor %}

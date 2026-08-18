@@ -1,0 +1,43 @@
+--- TESTCASE Tp File Loop
+
+--- INIT
+tp.SetVariable("Products", new[]
+{
+    new { Name = "Widget" },
+    new { Name = "Gadget" },
+    new { Name = "Gizmo" }
+});
+
+--- HTTP
+{% for product in Products %}
+### Create product {{ forloop.index }}: {{ product.Name }}
+# @name CreateProduct{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "{{ product.Name }}", "type": "product" }
+
+{% endfor %}
+
+--- TEST
+var productNames = new[] { "Widget", "Gadget", "Gizmo" };
+
+await tp.Test("All three loop-generated requests inside a .tp file should return 201.", async () =>
+{
+    for (var i = 1; i <= productNames.Length; i++)
+    {
+        Equal(201, tp.Responses[$"CreateProduct{i}"].StatusCode());
+    }
+});
+
+await tp.Test("Each request should carry its own product's data.", async () =>
+{
+    for (var i = 0; i < productNames.Length; i++)
+    {
+        dynamic body = await tp.Responses[$"CreateProduct{i + 1}"].GetBodyAsExpandoAsync();
+        Equal(productNames[i], body.title);
+    }
+});
+
+--- END

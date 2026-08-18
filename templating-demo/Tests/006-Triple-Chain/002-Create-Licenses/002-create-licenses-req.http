@@ -1,0 +1,10 @@
+{% for company in CreatedCompanies %}
+### Create license for company {{ company.CompanyId }}: {{ company.CompanyName }}
+# @name CreateLicense{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "License for {{ company.CompanyName }}", "companyId": {{ company.CompanyId }} }
+
+{% endfor %}

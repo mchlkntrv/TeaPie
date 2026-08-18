@@ -1,0 +1,10 @@
+{% for i in (1..5) %}
+### Create item {{ i }}
+# @name CreateItem{{ i }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "Item {{ i }}", "index": {{ i }} }
+
+{% endfor %}
