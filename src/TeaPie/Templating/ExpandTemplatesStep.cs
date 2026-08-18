@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TeaPie.Pipelines;
 using TeaPie.TestCases;
 
@@ -14,9 +15,21 @@ internal sealed class ExpandTemplatesStep(
         ExecutionContextValidator.ValidateParameter(
             testCaseExecutionContext.RequestsFileContent, out string content, "expand templates", "the requests file's content");
 
-        testCaseExecutionContext.RequestsFileContent =
-            templateExpander.Expand(content, testCaseExecutionContext.TestCase.RequestsFile.RelativePath);
+        var expandedContent = templateExpander.Expand(content, testCaseExecutionContext.TestCase.RequestsFile.RelativePath);
+        testCaseExecutionContext.RequestsFileContent = expandedContent;
+
+        LogExpansionResult(context, testCaseExecutionContext, content.Length, expandedContent.Length);
 
         await Task.CompletedTask;
     }
+
+    private static void LogExpansionResult(
+        ApplicationContext context, TestCaseExecutionContext testCaseExecutionContext, int originalLength, int expandedLength)
+        => context.Logger.LogDebug(
+            "Templates within the requests file at '{Path}' were expanded (content length {OriginalLength} -> " +
+            "{ExpandedLength}, {Change}).",
+            testCaseExecutionContext.TestCase.RequestsFile.RelativePath,
+            originalLength,
+            expandedLength,
+            originalLength == expandedLength ? "unchanged" : "loop(s) expanded");
 }
