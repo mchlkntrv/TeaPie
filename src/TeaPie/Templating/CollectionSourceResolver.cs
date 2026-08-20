@@ -65,11 +65,6 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
         return new LoopSource(items, items.Count);
     }
 
-    // Splits on top-level commas only, treating a double-quoted span as opaque so a comma
-    // inside a quoted literal (e.g. "a,b") is not mistaken for an item separator. Unlike a
-    // single alternation regex, this preserves empty slots between two commas so
-    // (1,,3) and (1, , 3) are both caught as an explicit error instead of one of them
-    // silently disappearing.
     private static List<string> SplitTopLevelItems(string inner)
     {
         List<string> items = [];

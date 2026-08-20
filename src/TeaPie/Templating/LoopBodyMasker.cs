@@ -26,9 +26,6 @@ internal sealed partial class LoopBodyMasker : ILoopBodyMasker
         return expression.Length == identifier.Length || expression[identifier.Length] is '.' or ' ' or '|' or '\t';
     }
 
-    // Matches {{ ... }}, treating "..." (double-quoted) spans as opaque so that literal
-    // {{ / }} characters inside a quoted filter argument (see the prepend/append dynamic-naming
-    // pattern in the spec) do not get mistaken for the token's own delimiters.
     [GeneratedRegex("\\{\\{((?:\"[^\"]*\"|[^{}\"])*)\\}\\}")]
     private static partial Regex TokenRegex();
 }

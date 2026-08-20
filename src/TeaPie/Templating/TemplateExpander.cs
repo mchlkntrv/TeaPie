@@ -10,13 +10,6 @@ internal sealed class TemplateExpander(
 {
     private const int MaxExpandedRequests = 1000;
 
-    // Fluid parses dots in a 'for x in Y' source expression as member access (Y.Z means
-    // "member Z of Y"), never as a literal dictionary key. TeaPie's own resolution of the
-    // (possibly dotted) source expression via ICollectionSourceResolver is the only resolution
-    // that matters, so named collections are always rebound under this fixed, dot-free alias
-    // before being handed to Fluid — this keeps Fluid's member-access parsing away from the
-    // original source expression entirely. Numeric ranges never go through the model, so they
-    // keep using the literal range expression directly.
     private const string SourceAlias = "__teapie_loop_source";
 
     private static readonly FluidParser Parser = new();
@@ -88,12 +81,7 @@ internal sealed class TemplateExpander(
         var context = new TemplateContext(model, options);
         var rendered = template!.Render(context);
 
-        // Belt-and-braces guard: TeaPie's own resolution already found 'source.ItemCount' items
-        // and the loop body is non-empty, so a genuinely empty render here means some other
-        // naming collision (not necessarily the dotted-name one this alias fixes) produced the
-        // same silent-zero-iteration symptom. Fail loudly instead of shipping a green run with
-        // zero requests actually expanded.
-        if (source.ItemCount > 0 && !string.IsNullOrWhiteSpace(block.Body) && rendered.Length == 0)
+        if (!string.IsNullOrWhiteSpace(block.Body) && rendered.Length == 0)
         {
             throw new InvalidOperationException(
                 $"Templating error in '{filePath}': loop over '{block.SourceExpression}' resolved " +

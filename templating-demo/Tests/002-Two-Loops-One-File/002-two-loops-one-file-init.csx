@@ -1,5 +1,3 @@
-// Two independent collections used by two separate, sequential (not nested)
-// loops in the same request file.
 tp.SetVariable("Products", new[]
 {
     new { Name = "Widget" },

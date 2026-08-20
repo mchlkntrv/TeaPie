@@ -48,15 +48,6 @@ internal sealed partial class LoopBlockScanner : ILoopBlockScanner
         return blocks;
     }
 
-    // After the strict scan above, re-scan the whole content for any tag whose keyword is 'for'
-    // or 'endfor' (well-formed or not, with or without leading/trailing '-' whitespace control)
-    // that did not end up inside a recognized block's span. This catches: a stray '{% endfor %}'
-    // with no preceding '{% for %}' (the strict scan above never even starts for that case, so it
-    // would otherwise flow through as literal, silently-unexpanded text); malformed '{% for %}'
-    // syntax (missing 'in', bad variable name); and would also catch a for/endfor tag using
-    // whitespace-control dashes if ForTagRegex/EndForTagRegex above ever stopped recognizing that
-    // form. Anything that isn't a for/endfor-keyword tag (e.g. unrelated '{%' in a JSON payload)
-    // is deliberately left untouched.
     private static void EnsureNoResidualForTags(string content, List<LoopBlock> blocks)
     {
         foreach (Match match in ForTagFamilyRegex().Matches(content))

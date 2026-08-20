@@ -19,7 +19,5 @@ await tp.Test(
             });
         }
 
-        // Level 2 of the chain: licenses created here (still carrying the ORIGINAL
-        // company name from level 1) feed the third and final test case's loop.
         tp.SetVariable("CreatedLicenses", createdLicenses);
     });

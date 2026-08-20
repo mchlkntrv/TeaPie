@@ -24,6 +24,5 @@ await tp.Test(
             Equal(201, tp.Responses[$"CreateDepartment{i}"].StatusCode());
         }
 
-        // Feeds the loop in 002-Follow-Up/002-follow-up-req.http.
         tp.SetVariable("CreatedPartners", createdPartners);
     });

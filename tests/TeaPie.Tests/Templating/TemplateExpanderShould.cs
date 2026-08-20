@@ -1,4 +1,5 @@
 using FluentAssertions;
+using NSubstitute;
 using TeaPie.Templating;
 
 namespace TeaPie.Tests.Templating;
@@ -117,6 +118,19 @@ public class TemplateExpanderShould
         var act = () => expander.Expand(content, "test.http");
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*1000*");
+    }
+
+    [Fact]
+    public void ThrowWhenResolvedItemCountDisagreesWithTheActuallyRenderedCollection()
+    {
+        const string content = "{% for x in Weird %}[{{ x }}]{% endfor %}";
+        var resolver = Substitute.For<ICollectionSourceResolver>();
+        resolver.Resolve("Weird").Returns(new LoopSource(new List<object>(), 3));
+        var expander = new TemplateExpander(new LoopBlockScanner(), new LoopBodyMasker(), resolver);
+
+        var act = () => expander.Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*resolved 3 item(s) but rendered empty output*");
     }
 
     [Fact]
