@@ -209,4 +209,17 @@ public class TemplateExpanderShould
         result.Should().Contain("## TEST-JSON-HAS-ID-PROPERTY: Temp.Attachments.CompanyId_2");
         result.Should().Contain("POST {{ApiGatewayBaseUrl}}/companies/{{Temp.Attachments.CompanyId_2}}/licenses");
     }
+
+    [Fact]
+    public void ExpandLoopOverInlineLiteralListIntoOneCopyPerItem()
+    {
+        const string content =
+            "{% for status in (\"new\", \"used\", \"certified\") %}### item {{ forloop.index }}: {{ status }}{% endfor %}";
+        var expander = new TemplateExpander(
+            new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(new global::TeaPie.Variables.Variables()));
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Be("### item 1: new### item 2: used### item 3: certified");
+    }
 }

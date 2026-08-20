@@ -1,0 +1,10 @@
+{% for status in ("new", "used", "certified") %}
+### Create listing #{{ forloop.index }} with status: {{ status }}
+# @name CreateListing{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "Listing {{ status }}" }
+
+{% endfor %}
