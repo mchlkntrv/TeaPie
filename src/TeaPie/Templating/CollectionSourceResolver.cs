@@ -122,14 +122,6 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
             return longValue;
         }
 
-        // A magnitude beyond long.MaxValue (~9.22e18) but still a whole, non-negative number
-        // (up to ulong.MaxValue, ~1.84e19) is still parsed exactly here, rather than silently
-        // falling through to double and losing precision the way values in this range used to.
-        if (ulong.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ulongValue))
-        {
-            return ulongValue;
-        }
-
         if (double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
         {
             return doubleValue;

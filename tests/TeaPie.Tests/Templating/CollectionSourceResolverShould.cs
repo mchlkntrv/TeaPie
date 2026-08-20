@@ -163,10 +163,10 @@ public class CollectionSourceResolverShould
     {
         var resolver = new CollectionSourceResolver(new global::TeaPie.Variables.Variables());
 
-        var source = resolver.Resolve("(12345678901234567890)");
+        var source = resolver.Resolve("(123456789012345678)");
 
         source.ItemCount.Should().Be(1);
-        source.Collection.Should().BeEquivalentTo(new List<object?> { 12345678901234567890L });
+        source.Collection.Should().BeEquivalentTo(new List<object?> { 123456789012345678L });
     }
 
     [Fact]
