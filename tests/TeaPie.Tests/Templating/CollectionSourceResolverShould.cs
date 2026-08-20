@@ -135,4 +135,67 @@ public class CollectionSourceResolverShould
 
         source.ItemCount.Should().Be(0);
     }
+
+    [Fact]
+    public void ResolveInlineLiteralListOfDoubles()
+    {
+        var resolver = new CollectionSourceResolver(new global::TeaPie.Variables.Variables());
+
+        var source = resolver.Resolve("(1.5, 2.75)");
+
+        source.ItemCount.Should().Be(2);
+        source.Collection.Should().BeEquivalentTo(new List<object?> { 1.5, 2.75 });
+    }
+
+    [Fact]
+    public void ResolveInlineLiteralListWithCommaInsideQuotedString()
+    {
+        var resolver = new CollectionSourceResolver(new global::TeaPie.Variables.Variables());
+
+        var source = resolver.Resolve("(\"a,b\", \"c\")");
+
+        source.ItemCount.Should().Be(2);
+        source.Collection.Should().BeEquivalentTo(new List<object?> { "a,b", "c" });
+    }
+
+    [Fact]
+    public void ResolveInlineLiteralListWithLargeIntegerAsLong()
+    {
+        var resolver = new CollectionSourceResolver(new global::TeaPie.Variables.Variables());
+
+        var source = resolver.Resolve("(12345678901234567890)");
+
+        source.ItemCount.Should().Be(1);
+        source.Collection.Should().BeEquivalentTo(new List<object?> { 12345678901234567890L });
+    }
+
+    [Fact]
+    public void ThrowWhenInlineLiteralListHasUnbalancedParentheses()
+    {
+        var resolver = new CollectionSourceResolver(new global::TeaPie.Variables.Variables());
+
+        var act = () => resolver.Resolve("(\"a\", \"b\"");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*unbalanced*");
+    }
+
+    [Fact]
+    public void ThrowWhenInlineLiteralListHasAnEmptyItemFromDoubleComma()
+    {
+        var resolver = new CollectionSourceResolver(new global::TeaPie.Variables.Variables());
+
+        var act = () => resolver.Resolve("(1,,3)");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*empty item*");
+    }
+
+    [Fact]
+    public void ThrowWhenInlineLiteralListHasAnEmptyItemFromWhitespaceOnlySlot()
+    {
+        var resolver = new CollectionSourceResolver(new global::TeaPie.Variables.Variables());
+
+        var act = () => resolver.Resolve("(1, , 3)");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*empty item*");
+    }
 }
