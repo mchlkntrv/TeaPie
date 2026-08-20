@@ -125,4 +125,14 @@ public class CollectionSourceResolverShould
         source.ItemCount.Should().Be(5);
         source.Collection.Should().BeNull();
     }
+
+    [Fact]
+    public void ResolveWhitespaceOnlyInlineLiteralListToZeroItems()
+    {
+        var resolver = new CollectionSourceResolver(new global::TeaPie.Variables.Variables());
+
+        var source = resolver.Resolve("(   )");
+
+        source.ItemCount.Should().Be(0);
+    }
 }

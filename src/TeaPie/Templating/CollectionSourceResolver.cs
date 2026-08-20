@@ -42,6 +42,11 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
 
     private static LoopSource ResolveInlineLiteralList(string inner)
     {
+        if (string.IsNullOrWhiteSpace(inner))
+        {
+            return new LoopSource(new List<object>(), 0);
+        }
+
         var items = LiteralItemRegex().Matches(inner)
             .Select(match => ParseLiteralToken(match.Value))
             .ToList();
