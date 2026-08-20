@@ -5,6 +5,4 @@ internal sealed record LoopBlock(
     string SourceExpression,
     string Body,
     int StartIndex,
-    int Length,
-    bool TrimBodyStart = false,
-    bool TrimBodyEnd = false);
+    int Length);

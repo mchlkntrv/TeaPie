@@ -37,11 +37,8 @@ internal sealed partial class LoopBlockScanner : ILoopBlockScanner
             var sourceExpression = openMatch.Groups[3].Value.Trim();
             var body = content[bodyStart..closeMatch.Index];
             var length = closeMatch.Index + closeMatch.Length - openMatch.Index;
-            var trimBodyStart = openMatch.Groups[4].Success;
-            var trimBodyEnd = closeMatch.Groups[1].Success;
 
-            blocks.Add(new LoopBlock(
-                loopVariableName, sourceExpression, body, openMatch.Index, length, trimBodyStart, trimBodyEnd));
+            blocks.Add(new LoopBlock(loopVariableName, sourceExpression, body, openMatch.Index, length));
 
             position = closeMatch.Index + closeMatch.Length;
         }
