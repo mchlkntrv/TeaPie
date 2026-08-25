@@ -121,6 +121,46 @@ public class TemplateExpanderShould
     }
 
     [Fact]
+    public void ExpandLoopWithExactlyMaxExpandedRequestsItems()
+    {
+        const string content = "{% for i in (1..1000) %}[{{ i }}]{% endfor %}";
+        var expander = new TemplateExpander(
+            new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(new global::TeaPie.Variables.Variables()));
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Count(c => c == '[').Should().Be(1000);
+        result.Should().Contain("[1]").And.Contain("[1000]");
+    }
+
+    [Fact]
+    public void ThrowWhenLoopExceedsMaxExpandedRequestsByExactlyOne()
+    {
+        const string content = "{% for i in (1..1001) %}[{{ i }}]{% endfor %}";
+        var expander = new TemplateExpander(
+            new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(new global::TeaPie.Variables.Variables()));
+
+        var act = () => expander.Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*1001*1000*");
+    }
+
+    [Fact]
+    public void AllowTwoIndependentLoopBlocksToEachReachMaxExpandedRequestsWithoutACumulativeLimit()
+    {
+        const string content =
+            "{% for i in (1..1000) %}[{{ i }}]{% endfor %}" +
+            "mid" +
+            "{% for j in (1..1000) %}[{{ j }}]{% endfor %}";
+        var expander = new TemplateExpander(
+            new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(new global::TeaPie.Variables.Variables()));
+
+        var act = () => expander.Expand(content, "test.http");
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
     public void ExpandLoopWithManyExpressionsPerItemWhenStillWithinTheRenderStepLimit()
     {
         var repeatedTag = string.Concat(Enumerable.Repeat("{{ i }}", 100));
