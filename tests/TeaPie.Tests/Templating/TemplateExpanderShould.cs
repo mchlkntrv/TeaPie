@@ -123,8 +123,6 @@ public class TemplateExpanderShould
     [Fact]
     public void ExpandLoopWithManyExpressionsPerItemWhenStillWithinTheRenderStepLimit()
     {
-        // 1000 items (the MaxExpandedRequests boundary) x 100 repeated expressions/item stays comfortably
-        // under MaxRenderSteps (200_000), proving the new guard doesn't interfere with large, valid loops.
         var repeatedTag = string.Concat(Enumerable.Repeat("{{ i }}", 100));
         var content = $"{{% for i in (1..1000) %}}{repeatedTag}{{% endfor %}}";
         var expander = new TemplateExpander(
@@ -138,9 +136,6 @@ public class TemplateExpanderShould
     [Fact]
     public void ThrowWhenRenderStepsExceedTheMaximum()
     {
-        // 1000 items (within MaxExpandedRequests) x 205 repeated expressions/item pushes total rendering
-        // steps just past MaxRenderSteps (200_000), which MaxExpandedRequests alone cannot catch since the
-        // collection size itself is legal.
         var repeatedTag = string.Concat(Enumerable.Repeat("{{ i }}", 205));
         var content = $"{{% for i in (1..1000) %}}{repeatedTag}{{% endfor %}}";
         var expander = new TemplateExpander(
@@ -154,8 +149,6 @@ public class TemplateExpanderShould
     [Fact]
     public void KeepStepBudgetsIndependentAcrossMultipleLoopBlocksInOneFile()
     {
-        // Each loop block renders with its own TemplateContext, so a loop that uses most of its own step
-        // budget must not reduce what a second, independent loop block in the same file has available.
         var heavyTag = string.Concat(Enumerable.Repeat("{{ i }}", 100));
         var content =
             $"{{% for i in (1..1000) %}}{heavyTag}{{% endfor %}}" +
@@ -284,5 +277,58 @@ public class TemplateExpanderShould
         var result = expander.Expand(content, "test.http");
 
         result.Should().Be("### item 1: new### item 2: used### item 3: certified");
+    }
+
+    [Fact]
+    public void PreserveUserAuthoredRawBlockAroundLoopVariableAsLiteralTextAcrossIterations()
+    {
+        const string content =
+            "{% for partner in Partners %}" +
+            "POST {{ApiGatewayBaseUrl}}/partners\n" +
+            "{ \"name\": \"{{ partner.Name }}\", \"literal\": \"{% raw %}{{ partner.Name }}{% endraw %}\" }" +
+            "{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Partners", new List<object> { new { Name = "Acme Corp" }, new { Name = "Globex Inc" } });
+        var expander = new TemplateExpander(new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(variables));
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Be(
+            "POST {{ApiGatewayBaseUrl}}/partners\n" +
+            "{ \"name\": \"Acme Corp\", \"literal\": \"{{ partner.Name }}\" }" +
+            "POST {{ApiGatewayBaseUrl}}/partners\n" +
+            "{ \"name\": \"Globex Inc\", \"literal\": \"{{ partner.Name }}\" }");
+    }
+
+    [Fact]
+    public void PreserveUserAuthoredRawBlockAroundTeaPieVariableInsideLoopBody()
+    {
+        const string content =
+            "{% for partner in Partners %}" +
+            "{ \"name\": \"{{ partner.Name }}\", \"literal\": \"{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}\" }" +
+            "{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Partners", new List<object> { new { Name = "Acme Corp" } });
+        var expander = new TemplateExpander(new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(variables));
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Be("{ \"name\": \"Acme Corp\", \"literal\": \"{{ApiGatewayBaseUrl}}\" }");
+    }
+
+    [Fact]
+    public void ThrowClearParseErrorForUnclosedUserAuthoredRawBlock()
+    {
+        const string content =
+            "{% for partner in Partners %}" +
+            "{ \"literal\": \"{% raw %}{{ partner.Name }}\" }" +
+            "{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Partners", new List<object> { new { Name = "Acme Corp" } });
+        var expander = new TemplateExpander(new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(variables));
+
+        var act = () => expander.Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*failed to parse*raw*");
     }
 }

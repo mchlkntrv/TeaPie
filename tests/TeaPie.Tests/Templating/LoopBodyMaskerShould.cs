@@ -55,4 +55,37 @@ public class LoopBodyMaskerShould
 
         result.Should().Be("{% raw %}{{tenantSomethingElse}}{% endraw %}");
     }
+
+    [Fact]
+    public void NotDoubleWrapATeaPieTokenAlreadyInsideAUserAuthoredRawBlock()
+    {
+        const string body = "{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}";
+        var masker = new LoopBodyMasker();
+
+        var result = masker.Mask(body, "tenant");
+
+        result.Should().Be(body);
+    }
+
+    [Fact]
+    public void LeaveALoopVariableTokenUntouchedInsideAUserAuthoredRawBlock()
+    {
+        const string body = "{% raw %}{{ tenant.Name }}{% endraw %}";
+        var masker = new LoopBodyMasker();
+
+        var result = masker.Mask(body, "tenant");
+
+        result.Should().Be(body);
+    }
+
+    [Fact]
+    public void StillMaskATeaPieTokenOutsideAnUnrelatedRawBlockInTheSameBody()
+    {
+        const string body = "{% raw %}{{ tenant.Name }}{% endraw %}{{ApiGatewayBaseUrl}}";
+        var masker = new LoopBodyMasker();
+
+        var result = masker.Mask(body, "tenant");
+
+        result.Should().Be("{% raw %}{{ tenant.Name }}{% endraw %}{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
+    }
 }
