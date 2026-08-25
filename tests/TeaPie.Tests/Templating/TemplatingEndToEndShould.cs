@@ -9,7 +9,7 @@ public class TemplatingEndToEndShould
         => new(new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(variables ?? new global::TeaPie.Variables.Variables()));
 
     [Fact]
-    public void RoundTripEveryDemoRequestFileByteIdentically()
+    public void RoundTripEveryDemoRequestFileWithoutLoopTagsByteIdentically()
     {
         var demoRoot = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "demo");
         var files = Directory.GetFiles(demoRoot, "*.http", SearchOption.AllDirectories)
@@ -19,6 +19,12 @@ public class TemplatingEndToEndShould
         foreach (var file in files)
         {
             var original = File.ReadAllText(file);
+
+            if (original.Contains("{%", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             var expanded = expander.Expand(original, file);
             expanded.Should().Be(original, $"file '{file}' does not contain '{{%' and must be returned unchanged");
         }
