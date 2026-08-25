@@ -19,6 +19,7 @@ internal sealed class ExpandTemplatesStep(
         testCaseExecutionContext.RequestsFileContent = expandedContent;
 
         LogExpansionResult(context, testCaseExecutionContext, content.Length, expandedContent.Length);
+        LogExpandedContent(context, testCaseExecutionContext, expandedContent);
 
         await Task.CompletedTask;
     }
@@ -32,4 +33,12 @@ internal sealed class ExpandTemplatesStep(
             originalLength,
             expandedLength,
             originalLength == expandedLength ? "unchanged" : "loop(s) expanded");
+
+    private static void LogExpandedContent(
+        ApplicationContext context, TestCaseExecutionContext testCaseExecutionContext, string expandedContent)
+        => context.Logger.LogTrace(
+            "Requests file at '{Path}' after template expansion:{NewLine}{Content}",
+            testCaseExecutionContext.TestCase.RequestsFile.RelativePath,
+            Environment.NewLine,
+            expandedContent);
 }

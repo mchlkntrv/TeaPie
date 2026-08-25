@@ -177,6 +177,22 @@ Templating fails loudly instead of silently producing zero or empty requests:
 
 All errors include the request file's path to make them actionable.
 
+## Inspecting the Expanded Content
+
+The expanded requests file only ever exists in memory, so instead of writing it to disk, TeaPie logs it:
+
+- **Debug level** — logs the content length before and after expansion (e.g. `120 -> 340`), so you can tell at a glance whether a loop actually expanded anything.
+- **Trace level** — logs the **entire** expanded `.http` content for the file, exactly as it is about to be split into individual requests.
+
+Trace is the most detailed logging level and is off by default. Enable it with:
+
+```bash
+teapie test -v                                              # verbose console output (includes Trace)
+teapie test --log-file debug.log --log-file-log-level Trace # write Trace-level logs, incl. expanded content, to a file
+```
+
+See [Logging](logging.md) for all available logging levels and options.
+
 ## Current Limitations
 
 This is a first iteration of templating support. The following are **not** supported yet:
@@ -187,4 +203,3 @@ This is a first iteration of templating support. The following are **not** suppo
 - External data files (CSV/JSON) as a collection source
 - Parallel execution of the requests produced by a loop
 - Automatic detection of duplicate `# @name` values across iterations (see [Naming Requests Inside a Loop](#naming-requests-inside-a-loop) — this must be avoided manually for now)
-- A built-in way to inspect the fully expanded file content; only a debug-level log entry reporting the content-length change before/after expansion is currently emitted
