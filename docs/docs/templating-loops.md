@@ -196,6 +196,24 @@ teapie test --log-file debug.log --log-file-log-level Trace # write Trace-level 
 
 See [Logging](logging.md) for all available logging levels and options.
 
+## Reporting
+
+Each request produced by a loop is reported exactly like any other request — there is no separate "loop" concept in the JUnit report. Verified manually with a 3-item loop (`{% for partner in Partners %}`, each iteration named `CreatePartner{{ forloop.index }}` and asserting `## TEST-EXPECT-STATUS: [201]`), plus a post-response script asserting on each iteration's own response via `tp.Responses["CreatePartner1"]`, `tp.Responses["CreatePartner2"]`, etc.:
+
+```xml
+<testsuites name="001-Loop-Over-Partners" tests="5" skipped="0" failures="0" time="0.054" timestamp="...">
+  <testsuite name="001-loop-over-partners" tests="5" skipped="0" failures="0" time="0.054">
+    <testcase name="[1] Status code should match one of these: [201]" ... />
+    <testcase name="[2] Status code should match one of these: [201]" ... />
+    <testcase name="[3] Status code should match one of these: [201]" ... />
+    <testcase name="All three loop-generated requests should return 201 (Created)." ... />
+    <testcase name="Each loop iteration should have sent its own partner's data (not a copy of one)." ... />
+  </testsuite>
+</testsuites>
+```
+
+All requests from the loop (and any plain requests in the same file) land in the **same** `<testsuite>`, since a test suite corresponds to one `.http`/`.tp` file, not one request. A failing iteration reports as a normal `<failure>` on its own `<testcase>`, with no effect on the other iterations' results.
+
 ## Current Limitations
 
 This is a first iteration of templating support. The following are **not** supported yet:
