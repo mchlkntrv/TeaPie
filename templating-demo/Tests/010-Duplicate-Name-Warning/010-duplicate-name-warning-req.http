@@ -1,0 +1,10 @@
+{% for partner in Partners %}
+### Create partner {{ forloop.index }}: {{ partner.Name }}
+# @name CreatePartner
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "{{ partner.Name }}", "body": "Registration ID {{ partner.RegistrationId }}" }
+
+{% endfor %}

@@ -131,11 +131,13 @@ This pattern stores each company's id under `Temp.Attachments.CompanyId_1`, `Tem
 
 ## Naming Requests Inside a Loop
 
-If you name a request with `# @name CreatePartner`, **every** iteration produces a request with that same literal name — there is currently no automatic detection or warning for this. Always include `{{ forloop.index }}` (or another per-iteration value) in the name:
+If you name a request with `# @name CreatePartner`, **every** iteration produces a request with that same literal name. TeaPie logs a warning for this (naming the file, the duplicated name, and how many requests share it) but does not fail the run — only the last-registered request remains resolvable by that name. Always include `{{ forloop.index }}` (or another per-iteration value) in the name to keep it unique:
 
 ```http
 # @name CreatePartner{{ forloop.index }}
 ```
+
+The same warning fires for duplicate names arising between a plain request and a loop-produced one, or across multiple loops in the same file — not just within a single loop.
 
 ## Multiple Loops in One File
 
@@ -174,6 +176,7 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Missing `{% endfor %}`, a stray `{% endfor %}` with no matching `{% for %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag |
 | Nested `{% for %}` loops | Error — not supported |
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
+| Two or more requests share the same `# @name` after expansion | Warning (not an error) — see [Naming Requests Inside a Loop](#naming-requests-inside-a-loop) |
 
 All errors include the request file's path to make them actionable.
 
@@ -202,4 +205,3 @@ This is a first iteration of templating support. The following are **not** suppo
 - Templating inside `.csx` scripts (only `.http`/`.tp` request content is expanded)
 - External data files (CSV/JSON) as a collection source
 - Parallel execution of the requests produced by a loop
-- Automatic detection of duplicate `# @name` values across iterations (see [Naming Requests Inside a Loop](#naming-requests-inside-a-loop) — this must be avoided manually for now)

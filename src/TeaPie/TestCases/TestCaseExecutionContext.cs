@@ -45,7 +45,7 @@ internal class TestCaseExecutionContext(TestCase testCase) : IExecutionContextEx
         Request = request;
         if (!name.Equals(string.Empty))
         {
-            _requests.Add(name, request);
+            _requests[name] = request;
         }
     }
 
@@ -54,7 +54,7 @@ internal class TestCaseExecutionContext(TestCase testCase) : IExecutionContextEx
         Response = response;
         if (!name.Equals(string.Empty))
         {
-            _responses.Add(name, response);
+            _responses[name] = response;
         }
     }
 
