@@ -121,6 +121,55 @@ public class TemplateExpanderShould
     }
 
     [Fact]
+    public void ExpandLoopWithManyExpressionsPerItemWhenStillWithinTheRenderStepLimit()
+    {
+        // 1000 items (the MaxExpandedRequests boundary) x 100 repeated expressions/item stays comfortably
+        // under MaxRenderSteps (200_000), proving the new guard doesn't interfere with large, valid loops.
+        var repeatedTag = string.Concat(Enumerable.Repeat("{{ i }}", 100));
+        var content = $"{{% for i in (1..1000) %}}{repeatedTag}{{% endfor %}}";
+        var expander = new TemplateExpander(
+            new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(new global::TeaPie.Variables.Variables()));
+
+        var act = () => expander.Expand(content, "test.http");
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void ThrowWhenRenderStepsExceedTheMaximum()
+    {
+        // 1000 items (within MaxExpandedRequests) x 205 repeated expressions/item pushes total rendering
+        // steps just past MaxRenderSteps (200_000), which MaxExpandedRequests alone cannot catch since the
+        // collection size itself is legal.
+        var repeatedTag = string.Concat(Enumerable.Repeat("{{ i }}", 205));
+        var content = $"{{% for i in (1..1000) %}}{repeatedTag}{{% endfor %}}";
+        var expander = new TemplateExpander(
+            new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(new global::TeaPie.Variables.Variables()));
+
+        var act = () => expander.Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*rendering steps*");
+    }
+
+    [Fact]
+    public void KeepStepBudgetsIndependentAcrossMultipleLoopBlocksInOneFile()
+    {
+        // Each loop block renders with its own TemplateContext, so a loop that uses most of its own step
+        // budget must not reduce what a second, independent loop block in the same file has available.
+        var heavyTag = string.Concat(Enumerable.Repeat("{{ i }}", 100));
+        var content =
+            $"{{% for i in (1..1000) %}}{heavyTag}{{% endfor %}}" +
+            "mid" +
+            $"{{% for j in (1..1000) %}}{heavyTag}{{% endfor %}}";
+        var expander = new TemplateExpander(
+            new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(new global::TeaPie.Variables.Variables()));
+
+        var act = () => expander.Expand(content, "test.http");
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
     public void ThrowWhenResolvedItemCountDisagreesWithTheActuallyRenderedCollection()
     {
         const string content = "{% for x in Weird %}[{{ x }}]{% endfor %}";

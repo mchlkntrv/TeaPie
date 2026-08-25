@@ -9,6 +9,7 @@ internal sealed class TemplateExpander(
     ICollectionSourceResolver sourceResolver) : ITemplateExpander
 {
     private const int MaxExpandedRequests = 1000;
+    private const int MaxRenderSteps = 200000;
 
     private const string SourceAlias = "__teapie_loop_source";
 
@@ -68,7 +69,11 @@ internal sealed class TemplateExpander(
                 $"Templating error in '{filePath}': failed to parse loop over '{block.SourceExpression}': {parseError}");
         }
 
-        var options = new TemplateOptions { MemberAccessStrategy = new UnsafeMemberAccessStrategy() };
+        var options = new TemplateOptions
+        {
+            MemberAccessStrategy = new UnsafeMemberAccessStrategy(),
+            MaxSteps = MaxRenderSteps
+        };
         options.Undefined = name => throw new InvalidOperationException(
             $"Templating error in '{filePath}': '{name}' is undefined while expanding the loop over '{block.SourceExpression}'.");
 
@@ -79,7 +84,20 @@ internal sealed class TemplateExpander(
         }
 
         var context = new TemplateContext(model, options);
-        var rendered = template!.Render(context);
+
+        string rendered;
+        try
+        {
+            rendered = template!.Render(context);
+        }
+        catch (InvalidOperationException ex) when (IsRenderStepLimitExceeded(ex))
+        {
+            throw new InvalidOperationException(
+                $"Templating error in '{filePath}': loop over '{block.SourceExpression}' ({source.ItemCount} " +
+                $"item(s)) exceeded the maximum of {MaxRenderSteps} rendering steps - likely too many '{{ }}' " +
+                "expressions per item rather than a large collection (collection size is capped separately). " +
+                "Check the loop body for repeated expressions, or split it into smaller loops.", ex);
+        }
 
         if (!string.IsNullOrWhiteSpace(block.Body) && rendered.Length == 0)
         {
@@ -91,4 +109,7 @@ internal sealed class TemplateExpander(
 
         return rendered;
     }
+
+    private static bool IsRenderStepLimitExceeded(InvalidOperationException ex)
+        => ex.Message.Contains("recursion", StringComparison.OrdinalIgnoreCase);
 }
