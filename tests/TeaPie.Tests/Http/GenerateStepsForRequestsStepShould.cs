@@ -1,6 +1,8 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
+using TeaPie.Http;
 using TeaPie.Pipelines;
 using TeaPie.Templating;
 using TeaPie.TestCases;
@@ -144,4 +146,152 @@ public class GenerateStepsForRequestsStepShould
             generateStepsForRequestsStep,
             Arg.Is<IPipelineStep[]>(steps => steps.Length == 6));
     }
+
+    [Fact]
+    public async Task RegisterEachLoopGeneratedRequestUnderItsRenderedForloopIndexNameAcrossTheRealPipeline()
+    {
+        const string template =
+            "{% for partner in Temp.Partners %}### Create partner\n" +
+            "# @name CreatePartner{{ forloop.index }}\n" +
+            "POST https://example.com/partners\n" +
+            "Content-Type: application/json\n\n" +
+            "{ \"registrationId\": \"{{ partner.RegistrationId }}\" }\n" +
+            "{% endfor %}";
+
+        var services = new ServiceCollection();
+        services.AddTeaPie(false, () => { });
+        var serviceProvider = services.BuildServiceProvider();
+
+        var variables = serviceProvider.GetRequiredService<IVariables>();
+        variables.SetVariable("Temp.Partners", new[]
+        {
+            new { RegistrationId = "01245" },
+            new { RegistrationId = "012426" }
+        });
+
+        var testCaseExecutionContext = RequestHelper.PrepareTestCaseContext(RequestsIndex.RequestWithFullStructure, false);
+        testCaseExecutionContext.RequestsFileContent = template;
+
+        var accessor = new TestCaseExecutionContextAccessor { Context = testCaseExecutionContext };
+
+        var appContext = new ApplicationContextBuilder()
+            .WithServiceProvider(serviceProvider)
+            .WithPath(RequestsIndex.RootFolderFullPath)
+            .Build();
+
+        var readStep = new ReadHttpFileStep(accessor);
+        await readStep.Execute(appContext);
+
+        var templateExpander = serviceProvider.GetRequiredService<ITemplateExpander>();
+        var expandStep = new ExpandTemplatesStep(accessor, templateExpander);
+        await expandStep.Execute(appContext);
+
+        IPipelineStep[]? insertedSteps = null;
+        var pipeline = Substitute.For<IPipeline>();
+        pipeline.When(p => p.InsertSteps(Arg.Any<IPipelineStep>(), Arg.Any<IPipelineStep[]>()))
+            .Do(call => insertedSteps = call.ArgAt<IPipelineStep[]>(1));
+        var generateStepsForRequestsStep = new GenerateStepsForRequestsStep(accessor, pipeline);
+
+        await generateStepsForRequestsStep.Execute(appContext);
+
+        insertedSteps.Should().NotBeNull();
+        insertedSteps!.Should().HaveCount(6);
+
+        await insertedSteps![0].Execute(appContext);
+        await insertedSteps[3].Execute(appContext);
+
+        testCaseExecutionContext.Requests.Should().ContainKey("CreatePartner1");
+        testCaseExecutionContext.Requests.Should().ContainKey("CreatePartner2");
+        testCaseExecutionContext.Requests.Keys.Should().NotContain(key => key.Contains("forloop", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task LogAWarningWhenALoopsAtNameOmitsForloopIndexAndProducesDuplicateNamesAcrossTheRealPipeline()
+    {
+        const string template =
+            "{% for partner in Temp.Partners %}### Create partner\n" +
+            "# @name CreatePartner\n" +
+            "POST https://example.com/partners\n" +
+            "Content-Type: application/json\n\n" +
+            "{ \"registrationId\": \"{{ partner.RegistrationId }}\" }\n" +
+            "{% endfor %}";
+
+        var (logger, requestsCount) = await ExecuteRealPipelineAndCaptureLogger(template);
+
+        requestsCount.Should().Be(2);
+        logger.Received(1).Log(
+            LogLevel.Warning,
+            Arg.Any<EventId>(),
+            Arg.Is<object>(state => ContainsDuplicateNameWarning(state, "CreatePartner", 2)),
+            null,
+            Arg.Any<Func<object, Exception?, string>>());
+    }
+
+    [Fact]
+    public async Task NotLogAWarningWhenALoopsAtNameIncludesForloopIndexAcrossTheRealPipeline()
+    {
+        const string template =
+            "{% for partner in Temp.Partners %}### Create partner\n" +
+            "# @name CreatePartner{{ forloop.index }}\n" +
+            "POST https://example.com/partners\n" +
+            "Content-Type: application/json\n\n" +
+            "{ \"registrationId\": \"{{ partner.RegistrationId }}\" }\n" +
+            "{% endfor %}";
+
+        var (logger, requestsCount) = await ExecuteRealPipelineAndCaptureLogger(template);
+
+        requestsCount.Should().Be(2);
+        logger.DidNotReceive().Log(
+            LogLevel.Warning,
+            Arg.Any<EventId>(),
+            Arg.Any<object>(),
+            Arg.Any<Exception?>(),
+            Arg.Any<Func<object, Exception?, string>>());
+    }
+
+    private static async Task<(ILogger<ApplicationContext> Logger, int RequestsCount)> ExecuteRealPipelineAndCaptureLogger(
+        string template)
+    {
+        var services = new ServiceCollection();
+        var logger = Substitute.For<ILogger<ApplicationContext>>();
+        services.AddSingleton(logger);
+        services.AddTeaPie(false, () => { });
+        var serviceProvider = services.BuildServiceProvider();
+
+        var variables = serviceProvider.GetRequiredService<IVariables>();
+        variables.SetVariable("Temp.Partners", new[]
+        {
+            new { RegistrationId = "01245" },
+            new { RegistrationId = "012426" }
+        });
+
+        var testCaseExecutionContext = RequestHelper.PrepareTestCaseContext(RequestsIndex.RequestWithFullStructure, false);
+        testCaseExecutionContext.RequestsFileContent = template;
+
+        var accessor = new TestCaseExecutionContextAccessor { Context = testCaseExecutionContext };
+
+        var appContext = new ApplicationContextBuilder()
+            .WithServiceProvider(serviceProvider)
+            .WithPath(RequestsIndex.RootFolderFullPath)
+            .Build();
+
+        var templateExpander = serviceProvider.GetRequiredService<ITemplateExpander>();
+        var expandStep = new ExpandTemplatesStep(accessor, templateExpander);
+        await expandStep.Execute(appContext);
+
+        int requestsCount = 0;
+        var pipeline = Substitute.For<IPipeline>();
+        pipeline.When(p => p.InsertSteps(Arg.Any<IPipelineStep>(), Arg.Any<IPipelineStep[]>()))
+            .Do(call => requestsCount = call.ArgAt<IPipelineStep[]>(1).Length / 3);
+        var generateStepsForRequestsStep = new GenerateStepsForRequestsStep(accessor, pipeline);
+
+        await generateStepsForRequestsStep.Execute(appContext);
+
+        return (logger, requestsCount);
+    }
+
+    private static bool ContainsDuplicateNameWarning(object? state, string expectedName, int expectedCount)
+        => state is IEnumerable<KeyValuePair<string, object?>> pairs
+            && pairs.Any(kvp => kvp.Key == "Name" && kvp.Value as string == expectedName)
+            && pairs.Any(kvp => kvp.Key == "Count" && Equals(kvp.Value, expectedCount));
 }

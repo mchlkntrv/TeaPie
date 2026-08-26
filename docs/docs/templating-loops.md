@@ -96,6 +96,21 @@ Content-Type: application/json
 
 Inside a loop body, `{{ forloop.index }}` gives the current **1-based** iteration number. It is commonly used to build unique request names (`# @name CreateItem{{ forloop.index }}`) and unique values inside the request body.
 
+The full `forloop` object also exposes:
+
+| Field | Meaning |
+| --- | --- |
+| `forloop.index` | 1-based iteration number |
+| `forloop.index0` | 0-based iteration number |
+| `forloop.first` | `true` on the first iteration, `false` otherwise |
+| `forloop.last` | `true` on the last iteration, `false` otherwise |
+
+All four are usable anywhere inside the loop body, including inside `# @name` declarations.
+Expansion happens **before** request names are parsed, so `# @name Create{{ forloop.index }}`
+becomes a literal name like `# @name Create1` before TeaPie's own request parser ever sees it —
+the parser and everything downstream of it (including `tp.Responses[...]` lookups and the test
+report) only ever see the rendered literal name.
+
 ## How Expansion Works (and What It Leaves Alone)
 
 Loop expansion only touches `{{ }}` expressions that reference the loop variable (e.g. `partner`, `i`, `status`) or `forloop`. Every other `{{ }}` expression — TeaPie variables, functions, or named-request references — is left **untouched**, to be resolved later by TeaPie's own variable/function resolution:

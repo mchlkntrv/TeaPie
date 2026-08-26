@@ -371,4 +371,62 @@ public class TemplateExpanderShould
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*failed to parse*raw*");
     }
+
+    [Theory]
+    [InlineData("{{ forloop.index }}", "1", "2")]
+    [InlineData("{{ forloop.index0 }}", "0", "1")]
+    [InlineData("{{ forloop.first }}", "true", "false")]
+    [InlineData("{{ forloop.last }}", "false", "true")]
+    public void ExpandEachForloopFieldInsideAnAtNameDeclaration(string token, string firstValue, string secondValue)
+    {
+        var content = "{% for tenant in Tenants %}# @name Create" + token + "\n{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { }, new { } });
+        var expander = new TemplateExpander(new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(variables));
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Contain("# @name Create" + firstValue);
+        result.Should().Contain("# @name Create" + secondValue);
+    }
+
+    [Fact]
+    public void ExpandAllForloopFieldsTogetherInsideAnAtNameDeclaration()
+    {
+        const string content =
+            "{% for tenant in Tenants %}" +
+            "# @name Item{{ forloop.index }}_{{ forloop.index0 }}_{{ forloop.first }}_{{ forloop.last }}\n" +
+            "{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { }, new { } });
+        var expander = new TemplateExpander(new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(variables));
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Contain("# @name Item1_0_true_false");
+        result.Should().Contain("# @name Item2_1_false_true");
+    }
+
+    [Fact]
+    public void ExpandForloopIndexInsideAnAtNameDeclarationCombinedWithARealisticRequestBody()
+    {
+        const string content =
+            "{% for partner in Partners %}" +
+            "### Create partner {{ forloop.index }}: {{ partner.Name }}\n" +
+            "# @name CreatePartner{{ forloop.index }}\n" +
+            "## TEST-EXPECT-STATUS: [201]\n" +
+            "POST https://example.com/partners\n" +
+            "Content-Type: application/json\n\n" +
+            "{ \"name\": \"{{ partner.Name }}\" }\n" +
+            "{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Partners", new List<object> { new { Name = "Acme" }, new { Name = "Globex" } });
+        var expander = new TemplateExpander(new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(variables));
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Contain("# @name CreatePartner1");
+        result.Should().Contain("# @name CreatePartner2");
+        result.Should().NotContain("{{ forloop.index }}");
+    }
 }
