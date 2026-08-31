@@ -6,7 +6,15 @@ namespace TeaPie.Tests.Templating;
 public class TemplatingEndToEndShould
 {
     private static TemplateExpander CreateExpander(global::TeaPie.Variables.IVariables? variables = null)
-        => new(new LoopBlockScanner(), new LoopBodyMasker(), new CollectionSourceResolver(variables ?? new global::TeaPie.Variables.Variables()));
+    {
+        var vars = variables ?? new global::TeaPie.Variables.Variables();
+        return new TemplateExpander(
+            new LoopBlockScanner(),
+            new LoopBodyMasker(),
+            new CollectionSourceResolver(vars),
+            new VariablesFluidModelBuilder(),
+            vars);
+    }
 
     [Fact]
     public void RoundTripEveryDemoRequestFileWithoutLoopTagsByteIdentically()

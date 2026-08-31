@@ -1,12 +1,15 @@
 using System.Text;
 using Fluid;
+using TeaPie.Variables;
 
 namespace TeaPie.Templating;
 
 internal sealed class TemplateExpander(
     ILoopBlockScanner scanner,
     ILoopBodyMasker masker,
-    ICollectionSourceResolver sourceResolver) : ITemplateExpander
+    ICollectionSourceResolver sourceResolver,
+    IVariablesFluidModelBuilder modelBuilder,
+    IVariables variables) : ITemplateExpander
 {
     private const int MaxExpandedRequests = 1000;
     private const int MaxRenderSteps = 200000;
@@ -77,7 +80,7 @@ internal sealed class TemplateExpander(
         options.Undefined = name => throw new InvalidOperationException(
             $"Templating error in '{filePath}': '{name}' is undefined while expanding the loop over '{block.SourceExpression}'.");
 
-        var model = new Dictionary<string, object?>();
+        var model = new Dictionary<string, object?>(modelBuilder.Build(variables));
         if (source.Collection is not null)
         {
             model[SourceAlias] = source.Collection;

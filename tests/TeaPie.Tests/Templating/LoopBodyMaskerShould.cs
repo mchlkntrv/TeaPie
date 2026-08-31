@@ -88,4 +88,62 @@ public class LoopBodyMaskerShould
 
         result.Should().Be("{% raw %}{{ tenant.Name }}{% endraw %}{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
     }
+
+    [Fact]
+    public void LeaveAnAssignedVariableTokenUntouched()
+    {
+        const string body = "{% assign greeting = \"Hello\" %}{{ greeting }}, {{ tenant.Name }}!";
+        var masker = new LoopBodyMasker();
+
+        var result = masker.Mask(body, "tenant");
+
+        result.Should().Be(body);
+    }
+
+    [Fact]
+    public void StillMaskATeaPieTokenNotMatchingAnyAssignedName()
+    {
+        const string body = "{% assign greeting = \"Hello\" %}{{ greeting }}{{ApiGatewayBaseUrl}}";
+        var masker = new LoopBodyMasker();
+
+        var result = masker.Mask(body, "tenant");
+
+        result.Should().Contain("{{ greeting }}");
+        result.Should().Contain("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
+    }
+
+    [Fact]
+    public void MaskAVariableThatOnlySharesAPrefixWithAnAssignedName()
+    {
+        const string body = "{% assign greeting = \"Hi\" %}{{greetingSomethingElse}}";
+        var masker = new LoopBodyMasker();
+
+        var result = masker.Mask(body, "tenant");
+
+        result.Should().Contain("{% raw %}{{greetingSomethingElse}}{% endraw %}");
+    }
+
+    [Fact]
+    public void LeaveATeaPieLookingTokenInsideAnAssignTagsStringLiteralUntouched()
+    {
+        const string body = "{% assign url = \"{{ApiGatewayBaseUrl}}\" %}{{ url }}";
+        var masker = new LoopBodyMasker();
+
+        var result = masker.Mask(body, "tenant");
+
+        result.Should().Contain("{% assign url = \"{{ApiGatewayBaseUrl}}\" %}");
+        result.Should().NotContain("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
+    }
+
+    [Fact]
+    public void NotTreatAnAssignInsideAUserAuthoredRawBlockAsABoundName()
+    {
+        const string body = "{% raw %}{% assign greeting = \"Hi\" %}{% endraw %}{{ greeting }}";
+        var masker = new LoopBodyMasker();
+
+        var result = masker.Mask(body, "tenant");
+
+        result.Should().Contain("{% raw %}{% assign greeting = \"Hi\" %}{% endraw %}");
+        result.Should().Contain("{% raw %}{{ greeting }}{% endraw %}");
+    }
 }
