@@ -1,4 +1,5 @@
 ﻿using FluentAssertions;
+using NSubstitute;
 using TeaPie.Templating;
 
 namespace TeaPie.Tests.Templating;
@@ -132,5 +133,16 @@ public class VariablesFluidModelBuilderShould
 
         result.Should().NotContainKey("AccessToken");
         result.Should().ContainKey("PartnerCount");
+    }
+
+    [Fact]
+    public void ReturnAnEmptyModelWithoutThrowingWhenBuiltAgainstAnUnconfiguredSubstitutedIVariables()
+    {
+        var variables = Substitute.For<global::TeaPie.Variables.IVariables>();
+        var builder = new VariablesFluidModelBuilder();
+
+        var act = () => builder.Build(variables);
+
+        act.Should().NotThrow().Which.Should().BeEmpty();
     }
 }

@@ -10,6 +10,13 @@ internal sealed class VariablesFluidModelBuilder : IVariablesFluidModelBuilder
 
         foreach (var scope in GetScopesInAscendingPriorityOrder(variables))
         {
+            // Defensive: a mocked IVariables can return null for an unconfigured scope; the production
+            // Variables implementation never does.
+            if (scope is null)
+            {
+                continue;
+            }
+
             foreach (var variable in scope)
             {
                 if (variable.HasTag(Constants.SecretVariableTag))

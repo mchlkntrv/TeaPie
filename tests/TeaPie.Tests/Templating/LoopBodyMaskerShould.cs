@@ -146,4 +146,26 @@ public class LoopBodyMaskerShould
         result.Should().Contain("{% raw %}{% assign greeting = \"Hi\" %}{% endraw %}");
         result.Should().Contain("{% raw %}{{ greeting }}{% endraw %}");
     }
+
+    [Fact]
+    public void StillMaskATeaPieTokenInsideAnIfBlockThatDoesNotBelongToLoopScope()
+    {
+        const string body = "{% if tenant.Name == \"Acme\" %}{{ApiGatewayBaseUrl}}{% endif %}";
+        var masker = new LoopBodyMasker();
+
+        var result = masker.Mask(body, "tenant");
+
+        result.Should().Contain("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
+    }
+
+    [Fact]
+    public void LeaveALoopScopedTokenInsideAnIfBlockUntouched()
+    {
+        const string body = "{% if forloop.first %}{{ tenant.Name }}{% endif %}";
+        var masker = new LoopBodyMasker();
+
+        var result = masker.Mask(body, "tenant");
+
+        result.Should().Be(body);
+    }
 }

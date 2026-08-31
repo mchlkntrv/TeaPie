@@ -1,21 +1,10 @@
 using FluentAssertions;
-using TeaPie.Templating;
+using static TeaPie.Tests.Templating.TemplatingTestHelpers;
 
 namespace TeaPie.Tests.Templating;
 
 public class TemplatingEndToEndShould
 {
-    private static TemplateExpander CreateExpander(global::TeaPie.Variables.IVariables? variables = null)
-    {
-        var vars = variables ?? new global::TeaPie.Variables.Variables();
-        return new TemplateExpander(
-            new LoopBlockScanner(),
-            new LoopBodyMasker(),
-            new CollectionSourceResolver(vars),
-            new VariablesFluidModelBuilder(),
-            vars);
-    }
-
     [Fact]
     public void RoundTripEveryDemoRequestFileWithoutLoopTagsByteIdentically()
     {

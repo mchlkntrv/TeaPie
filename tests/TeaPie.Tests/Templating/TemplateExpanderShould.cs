@@ -1,22 +1,12 @@
 using FluentAssertions;
 using NSubstitute;
+using static TeaPie.Tests.Templating.TemplatingTestHelpers;
 using TeaPie.Templating;
 
 namespace TeaPie.Tests.Templating;
 
 public class TemplateExpanderShould
 {
-    private static TemplateExpander CreateExpander(global::TeaPie.Variables.IVariables? variables = null)
-    {
-        var vars = variables ?? new global::TeaPie.Variables.Variables();
-        return new TemplateExpander(
-            new LoopBlockScanner(),
-            new LoopBodyMasker(),
-            new CollectionSourceResolver(vars),
-            new VariablesFluidModelBuilder(),
-            vars);
-    }
-
     [Fact]
     public void ExpandLoopOverNamedCollectionIntoOneCopyPerItem()
     {
@@ -493,8 +483,11 @@ public class TemplateExpanderShould
     {
         // Known limitation (Fluid 2.31.0): once there is any other literal text in the loop body,
         // the "rendered empty output" guard no longer fires, so a typo'd assign RHS name silently
-        // renders as an empty string with no error at all. Deferred to Step B (spec §10), which
-        // already owns the general "Undefined routing inside {% %} tag expressions" question.
+        // renders as an empty string with no error at all. Not resolved by Step B: that step
+        // confirmed the same silent-falsy pattern also applies to {% if %} conditions (see the
+        // "Resolved (corrected during implementation)" note in spec §7 Step B), but did not change
+        // this assign/masking behavior. Step E1 (top-level tags) is the next step that touches this
+        // masking/rendering path and could revisit it, though nothing commits it to doing so.
         const string content = "{% for tenant in Tenants %}X{% assign greeting = NoSuchVariable %}{{ greeting }}Y{% endfor %}";
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Tenants", new List<object> { new { } });
@@ -594,5 +587,227 @@ public class TemplateExpanderShould
         var result = CreateExpander(variables).Expand(content, "test.http");
 
         result.Should().Be("[]");
+    }
+
+    [Fact]
+    public void RenderTheIfBranchWhenTheConditionIsTrueAndTheElseBranchWhenItIsFalse()
+    {
+        const string content =
+            "{% for tenant in Tenants %}" +
+            "{% if tenant.Name == \"Acme\" %}MATCH{% else %}NOMATCH{% endif %}" +
+            "{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" }, new { Name = "Globex" } });
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("MATCHNOMATCH");
+    }
+
+    [Fact]
+    public void FallThroughAnElsifChainToTheMatchingBranch()
+    {
+        const string content =
+            "{% for tenant in Tenants %}" +
+            "{% if tenant.Name == \"Acme\" %}A{% elsif tenant.Name == \"Globex\" %}G{% else %}O{% endif %}" +
+            "{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object>
+        {
+            new { Name = "Acme" }, new { Name = "Globex" }, new { Name = "Initech" }
+        });
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("AGO");
+    }
+
+    [Fact]
+    public void UseForloopFirstAndLastInsideAnIfCondition()
+    {
+        const string content =
+            "{% for i in (1..3) %}" +
+            "{% if forloop.first %}FIRST{% elsif forloop.last %}LAST{% else %}MID{% endif %}" +
+            "{% endfor %}";
+
+        var result = CreateExpander().Expand(content, "test.http");
+
+        result.Should().Be("FIRSTMIDLAST");
+    }
+
+    [Fact]
+    public void EvaluateAnIfConditionOverABridgedIVariablesValue()
+    {
+        const string content =
+            "{% for tenant in Tenants %}{% if PartnerCount > 5 %}BIG{% else %}SMALL{% endif %}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { } });
+        variables.CollectionVariables.Set("PartnerCount", 10);
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("BIG");
+    }
+
+    [Fact]
+    public void EvaluateAnIfConditionOverABridgedIVariablesValueThatIsFalse()
+    {
+        const string content =
+            "{% for tenant in Tenants %}{% if PartnerCount > 5 %}BIG{% else %}SMALL{% endif %}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { } });
+        variables.CollectionVariables.Set("PartnerCount", 2);
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("SMALL");
+    }
+
+    [Fact]
+    public void ResolveAnAssignTargetDeclaredInBothBranchesOfAnIfBlockAndUsedAfterEndif()
+    {
+        const string content =
+            "{% for tenant in Tenants %}" +
+            "{% if PartnerCount > 5 %}{% assign label = \"big\" %}{% else %}{% assign label = \"small\" %}{% endif %}" +
+            "{{ label }}" +
+            "{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { } });
+        variables.CollectionVariables.Set("PartnerCount", 10);
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("big");
+    }
+
+    [Fact]
+    public void TreatAnUndefinedNameInAnIfConditionAsFalsyWithoutThrowing()
+    {
+        // Fluid 2.31.0's {% if %} evaluates condition truthiness directly and never routes an
+        // undefined bare name through TemplateOptions.Undefined (that callback only fires for {{ }}
+        // output interpolation). This differs from the spec's original Step B assumption ("condition
+        // referencing a name that resolves to neither the loop model nor IVariables still throws via
+        // Undefined") — corrected here: it silently evaluates to falsy, matching standard Liquid
+        // semantics where nil/undefined is falsy.
+        const string content =
+            "{% for tenant in Tenants %}{% if NoSuchVariable %}YES{% else %}NO{% endif %}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { } });
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("NO");
+    }
+
+    [Fact]
+    public void TreatADottedTeaPieVariableNameInAnIfConditionAsFalsyAsADocumentedLimitation()
+    {
+        // Same root cause as TemplateExpanderShould's assign-side dotted-name characterization
+        // (Step A): Fluid parses "Temp.FreePartners" in an expression as member access on a root
+        // identifier "Temp", which is absent from the bridge model (keyed by the literal dotted
+        // string) — so the condition is falsy, not an error.
+        const string content =
+            "{% for tenant in Tenants %}{% if Temp.FreePartners %}YES{% else %}NO{% endif %}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { } });
+        variables.SetVariable("Temp.FreePartners", new List<string> { "a" });
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("NO");
+    }
+
+    [Fact]
+    public void TreatAVariableExplicitlySetToNullInAnIfConditionAsFalsy()
+    {
+        const string content =
+            "{% for tenant in Tenants %}{% if MaybeNull %}YES{% else %}NO{% endif %}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { } });
+        variables.CollectionVariables.Set<object?>("MaybeNull", null);
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("NO");
+    }
+
+    [Fact]
+    public void StillThrowForAnUndefinedLoopItemMemberInsideAnIfBranch()
+    {
+        // Regression guard: confirm the if/unless work above did not weaken the existing Undefined
+        // callback for {{ }} interpolation (Phase 1 behavior) when the branch that references it
+        // actually renders. Uses tenant.TypoField (a loop-scoped member access, so LoopBodyMasker
+        // does not mask it away) rather than a bare undefined name — a bare name like NoSuchVariable
+        // is masked into {% raw %} and never reaches Fluid at all, regardless of if/unless, so it
+        // can't regression-test this. Mirrors the existing ThrowWhenLoopItemFieldIsUndefined test.
+        const string content =
+            "{% for tenant in Tenants %}{% if true %}{{ tenant.TypoField }}{% endif %}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" } });
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*TypoField*");
+    }
+
+    [Fact]
+    public void ThrowAClearParseErrorWhenEndifIsMissing()
+    {
+        const string content = "{% for tenant in Tenants %}{% if tenant.Name %}X{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" } });
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*failed to parse loop*");
+    }
+
+    [Fact]
+    public void RenderTheUnlessBodyOnlyWhenTheConditionIsFalse()
+    {
+        const string content =
+            "{% for tenant in Tenants %}{% unless tenant.Name == \"Acme\" %}NOT-ACME{% endunless %}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" }, new { Name = "Globex" } });
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("NOT-ACME");
+    }
+
+    [Fact]
+    public void RenderTheElseBranchOfUnlessWhenTheConditionIsTrue()
+    {
+        const string content =
+            "{% for tenant in Tenants %}" +
+            "{% unless tenant.Name == \"Acme\" %}NOT-ACME{% else %}IS-ACME{% endunless %}" +
+            "{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" }, new { Name = "Globex" } });
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("IS-ACMENOT-ACME");
+    }
+
+    [Fact]
+    public void ThrowAMisdiagnosingGuardMessageWhenAnUnlessFiltersOutEveryLoopItem()
+    {
+        // Known limitation: {% unless %}/{% if %} can legitimately filter out every item in a loop
+        // (this is the spec's own motivating use case for adding conditionals — "skip a request if
+        // X"), but TemplateExpander's existing "rendered empty output" guard (added before if/unless
+        // existed, to catch masking/naming-collision bugs) cannot distinguish that from a real engine
+        // bug, so it throws a message that wrongly claims "a templating engine issue (e.g. a naming
+        // collision)" for perfectly correct, fully-filtered output. Not fixed by this step — whether
+        // to relax the guard when the body contains conditional tags is a real design decision,
+        // deferred to Step E1/E2 (see spec §7 Step B).
+        const string content =
+            "{% for tenant in Tenants %}{% unless tenant.Name == \"Acme\" %}X{% endunless %}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" }, new { Name = "Acme" } });
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*rendered empty output*");
     }
 }
