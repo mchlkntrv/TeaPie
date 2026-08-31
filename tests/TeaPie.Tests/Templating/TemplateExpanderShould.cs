@@ -8,6 +8,26 @@ namespace TeaPie.Tests.Templating;
 public class TemplateExpanderShould
 {
     [Fact]
+    public void RenderATopLevelIfBlockOutsideAnyLoop()
+    {
+        const string content = "{% if true %}YES{% else %}NO{% endif %}";
+
+        var result = CreateExpander().Expand(content, "test.http");
+
+        result.Should().Be("YES");
+    }
+
+    [Fact]
+    public void RenderATopLevelAssignAndUseItInSubsequentTopLevelInterpolation()
+    {
+        const string content = "{% assign greeting = \"hi\" %}{{ greeting }}";
+
+        var result = CreateExpander().Expand(content, "test.http");
+
+        result.Should().Be("hi");
+    }
+
+    [Fact]
     public void ExpandLoopOverNamedCollectionIntoOneCopyPerItem()
     {
         const string content =
@@ -177,8 +197,18 @@ public class TemplateExpanderShould
         act.Should().Throw<InvalidOperationException>().WithMessage("*rendering steps*");
     }
 
+    // Was: KeepStepBudgetsIndependentAcrossMultipleLoopBlocksInOneFile, asserting NotThrow(). The old
+    // per-block splice-and-render architecture gave each loop block its own fresh 200,000-step render
+    // budget, so two loops of 1000 x 100 tags each (~100,000 render steps apiece - see
+    // ThrowWhenRenderStepsExceedTheMaximum above, where 1000 x 205 tags is enough to exceed 200,000,
+    // confirming a rough ~1-step-per-{{ }}-expression-per-iteration calibration) stayed independently
+    // under the cap. The whole-file single-render rewrite intentionally shares ONE 200,000-step budget
+    // across the entire file (an already-accepted, documented trade-off - no realistic file gets
+    // remotely close to this limit). Under the shared budget, this file's combined ~200,000 render
+    // steps (just over the cap, once loop/iteration overhead beyond the raw tag count is added in) now
+    // exceeds it, so this documents the new, correct, shared-budget behavior instead.
     [Fact]
-    public void KeepStepBudgetsIndependentAcrossMultipleLoopBlocksInOneFile()
+    public void ThrowWhenTwoLoopBlocksTogetherExceedTheSharedRenderStepBudget()
     {
         var heavyTag = string.Concat(Enumerable.Repeat("{{ i }}", 100));
         var content =
@@ -189,11 +219,19 @@ public class TemplateExpanderShould
 
         var act = () => expander.Expand(content, "test.http");
 
-        act.Should().NotThrow();
+        act.Should().Throw<InvalidOperationException>().WithMessage("*rendering steps*");
     }
 
+    // Was: ThrowWhenResolvedItemCountDisagreesWithTheActuallyRenderedCollection. The old per-block
+    // "rendered empty output" guard compared the resolver's reported item count against whether the
+    // spliced-in block actually produced output, to catch resolver/render disagreements. The
+    // whole-file single-render rewrite removes that guard entirely (it doesn't map onto a single
+    // whole-file render, and was already known to misdiagnose legitimately-empty output elsewhere -
+    // see the "misdiagnosing guard" test below). A mock resolver reporting ItemCount=3 alongside an
+    // actually-empty collection is no longer detected as an error: the collection (empty) drives the
+    // render, so this now renders successfully to an empty string.
     [Fact]
-    public void ThrowWhenResolvedItemCountDisagreesWithTheActuallyRenderedCollection()
+    public void RenderEmptyWithoutThrowingWhenResolvedItemCountDisagreesWithTheActuallyRenderedCollection()
     {
         const string content = "{% for x in Weird %}[{{ x }}]{% endfor %}";
         var resolver = Substitute.For<ICollectionSourceResolver>();
@@ -201,9 +239,9 @@ public class TemplateExpanderShould
         var expander = new TemplateExpander(
             new LoopBlockScanner(), new LoopBodyMasker(), resolver, new VariablesFluidModelBuilder(), new global::TeaPie.Variables.Variables());
 
-        var act = () => expander.Expand(content, "test.http");
+        var result = expander.Expand(content, "test.http");
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*resolved 3 item(s) but rendered empty output*");
+        result.Should().BeEmpty();
     }
 
     [Fact]
@@ -459,35 +497,38 @@ public class TemplateExpanderShould
     }
 
     // Fluid 2.31.0's {% assign %} does not route an undefined bare-name right-hand side through
-    // TemplateOptions.Undefined the way {{ }} interpolation does — it silently yields nil. The throw
-    // observed here therefore comes from the unrelated "rendered empty output" guard, which only fires
-    // because this loop body has no other literal text. See the companion test below for the real behavior.
+    // TemplateOptions.Undefined the way {{ }} interpolation does — it silently yields nil.
+    // Previously (per-block splice-and-render architecture) this loop body having no other literal
+    // text meant the block spliced in as empty output, which tripped the old "rendered empty output"
+    // guard and threw. The whole-file single-render rewrite removes that guard entirely (it doesn't
+    // map onto a single whole-file render, and was already known to misdiagnose legitimately-empty
+    // output - see the "misdiagnosing guard" test further below), so this scenario now renders
+    // successfully to an empty string instead of throwing.
     [Fact]
-    public void FailWithAGenericGuardMessageWhenAnAssignRightHandSideIsUndefinedAndTheEntireBodyRendersEmpty()
+    public void RenderEmptyWithoutThrowingWhenAnAssignRightHandSideIsUndefinedAndTheEntireBodyRendersEmpty()
     {
         const string content = "{% for tenant in Tenants %}{% assign greeting = NoSuchVariable %}{{ greeting }}{% endfor %}";
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Tenants", new List<object> { new { } });
 
-        var act = () => CreateExpander(variables).Expand(content, "test.http");
+        var result = CreateExpander(variables).Expand(content, "test.http");
 
-        // Pin the guard message explicitly: a bare Throw<InvalidOperationException>() here would
-        // also pass if the throw came from a genuine Undefined error, hiding the gap this documents.
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*rendered empty output*")
-            .Which.Message.Should().NotContain("NoSuchVariable");
+        result.Should().BeEmpty();
     }
 
     [Fact]
     public void SilentlyRenderEmptyWithoutThrowingWhenAnAssignRightHandSideIsUndefinedAndTheBodyHasSurroundingLiteralText()
     {
-        // Known limitation (Fluid 2.31.0): once there is any other literal text in the loop body,
-        // the "rendered empty output" guard no longer fires, so a typo'd assign RHS name silently
-        // renders as an empty string with no error at all. Not resolved by Step B: that step
-        // confirmed the same silent-falsy pattern also applies to {% if %} conditions (see the
-        // "Resolved (corrected during implementation)" note in spec §7 Step B), but did not change
-        // this assign/masking behavior. Step E1 (top-level tags) is the next step that touches this
-        // masking/rendering path and could revisit it, though nothing commits it to doing so.
+        // Known limitation (Fluid 2.31.0): a typo'd assign RHS name silently renders as an empty
+        // string with no error at all. Previously (per-block splice-and-render architecture) this
+        // scenario already rendered successfully because the old "rendered empty output" guard only
+        // fired when the whole loop body produced no output - the surrounding literal text ("X"/"Y")
+        // kept it out of scope. Step E1's whole-file single-render rewrite removed that guard
+        // entirely (it doesn't map onto a single whole-file render), so this now renders successfully
+        // unconditionally, not just when there's other literal text present - see the sibling test
+        // above (RenderEmptyWithoutThrowingWhenAnAssignRightHandSideIsUndefinedAndTheEntireBodyRenders
+        // Empty), which previously would have thrown under the old guard and now also renders
+        // successfully.
         const string content = "{% for tenant in Tenants %}X{% assign greeting = NoSuchVariable %}{{ greeting }}Y{% endfor %}";
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Tenants", new List<object> { new { } });
@@ -558,22 +599,22 @@ public class TemplateExpanderShould
     }
 
     [Fact]
-    public void FailWithAGuardMessageThatNeverNamesTheDottedVariableWhenADottedAssignRightHandSideRendersAnEmptyBody()
+    public void RenderEmptyWithoutThrowingWhenADottedAssignRightHandSideRendersAnEmptyBody()
     {
-        // Companion to the test above: with no other literal text in the body, the failure that does
-        // surface is the generic "rendered empty output" guard, whose message never mentions the
-        // dotted variable the author actually meant — so the diagnostic is unhelpful, not merely
-        // confusingly named.
+        // Companion to the test above. Previously (per-block splice-and-render architecture), with no
+        // other literal text in the body, the failure that surfaced was the generic "rendered empty
+        // output" guard, whose message never mentioned the dotted variable the author actually meant.
+        // The whole-file single-render rewrite removes that guard entirely (see the comment on
+        // RenderEmptyWithoutThrowingWhenAnAssignRightHandSideIsUndefinedAndTheEntireBodyRendersEmpty
+        // above), so this now renders successfully to an empty string instead of throwing.
         const string content = "{% for tenant in Tenants %}{% assign x = Temp.FreePartners %}{{ x }}{% endfor %}";
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Tenants", new List<object> { new { } });
         variables.SetVariable("Temp.FreePartners", new List<string> { "a" });
 
-        var act = () => CreateExpander(variables).Expand(content, "test.http");
+        var result = CreateExpander(variables).Expand(content, "test.http");
 
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*rendered empty output*")
-            .Which.Message.Should().NotContain("FreePartners");
+        result.Should().BeEmpty();
     }
 
     [Fact]
@@ -759,7 +800,11 @@ public class TemplateExpanderShould
 
         var act = () => CreateExpander(variables).Expand(content, "test.http");
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*failed to parse loop*");
+        // Wording updated for the whole-file single-render rewrite: parse errors are no longer
+        // attributed to a specific loop block (there is no per-block parse step anymore) - the
+        // whole transformed file is parsed once, so the message is now generically "failed to
+        // parse template".
+        act.Should().Throw<InvalidOperationException>().WithMessage("*failed to parse template*");
     }
 
     [Fact]
@@ -790,24 +835,257 @@ public class TemplateExpanderShould
         result.Should().Be("IS-ACMENOT-ACME");
     }
 
+    // Was: ThrowAMisdiagnosingGuardMessageWhenAnUnlessFiltersOutEveryLoopItem. {% unless %}/{% if %}
+    // can legitimately filter out every item in a loop (this is the spec's own motivating use case for
+    // adding conditionals — "skip a request if X"), but the old per-block "rendered empty output"
+    // guard (added before if/unless existed, to catch masking/naming-collision bugs) could not
+    // distinguish that from a real engine bug, so it threw a message that wrongly claimed "a
+    // templating engine issue (e.g. a naming collision)" for perfectly correct, fully-filtered output.
+    // The whole-file single-render rewrite removes that guard entirely — it doesn't map onto a single
+    // whole-file render, and this misfire is exactly why it was already known to be unsound — so this
+    // scenario now renders successfully to an empty string instead of throwing a misdiagnosing error.
     [Fact]
-    public void ThrowAMisdiagnosingGuardMessageWhenAnUnlessFiltersOutEveryLoopItem()
+    public void RenderEmptyWithoutThrowingWhenAnUnlessFiltersOutEveryLoopItem()
     {
-        // Known limitation: {% unless %}/{% if %} can legitimately filter out every item in a loop
-        // (this is the spec's own motivating use case for adding conditionals — "skip a request if
-        // X"), but TemplateExpander's existing "rendered empty output" guard (added before if/unless
-        // existed, to catch masking/naming-collision bugs) cannot distinguish that from a real engine
-        // bug, so it throws a message that wrongly claims "a templating engine issue (e.g. a naming
-        // collision)" for perfectly correct, fully-filtered output. Not fixed by this step — whether
-        // to relax the guard when the body contains conditional tags is a real design decision,
-        // deferred to Step E1/E2 (see spec §7 Step B).
         const string content =
             "{% for tenant in Tenants %}{% unless tenant.Name == \"Acme\" %}X{% endunless %}{% endfor %}";
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" }, new { Name = "Acme" } });
 
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FallThroughATopLevelElsifChainToTheMatchingBranch()
+    {
+        const string content =
+            "{% if Environment == \"prod\" %}P{% elsif Environment == \"staging\" %}S{% else %}D{% endif %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Environment", "staging");
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("S");
+    }
+
+    [Fact]
+    public void RenderATopLevelUnlessBlock()
+    {
+        const string content = "{% unless SkipSeed %}SEEDING{% endunless %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("SkipSeed", false);
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("SEEDING");
+    }
+
+    [Fact]
+    public void EvaluateATopLevelIfConditionOverABridgedIVariablesValue()
+    {
+        const string content = "{% if PartnerCount > 5 %}BIG{% else %}SMALL{% endif %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.CollectionVariables.Set("PartnerCount", 10);
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("BIG");
+    }
+
+    [Fact]
+    public void TreatAnUndefinedNameInATopLevelIfConditionAsFalsyWithoutThrowing()
+    {
+        const string content = "{% if NoSuchVariable %}YES{% else %}NO{% endif %}";
+
+        var result = CreateExpander().Expand(content, "test.http");
+
+        result.Should().Be("NO");
+    }
+
+    [Fact]
+    public void UseATopLevelAssignTargetInAnIfConditionOverAValueDerivedFromABridgedVariable()
+    {
+        const string content =
+            "{% assign isBig = false %}" +
+            "{% if PartnerCount > 5 %}{% assign isBig = true %}{% endif %}" +
+            "{% if isBig %}BIG{% else %}SMALL{% endif %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.CollectionVariables.Set("PartnerCount", 10);
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("BIG");
+    }
+
+    [Fact]
+    public void RenderATopLevelAssignConsumedByASubsequentLoopInTheSameFile()
+    {
+        const string content =
+            "{% assign label = \"seeded\" %}" +
+            "{% for item in Items %}{{ label }}-{{ item.Name }};{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Items", new List<object> { new { Name = "A" }, new { Name = "B" } });
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("seeded-A;seeded-B;");
+    }
+
+    [Fact]
+    public void PersistATopLevelAssignedStringValueToCollectionVariables()
+    {
+        const string content = "{% assign PartnerLabel = \"free\" %}";
+        var variables = new global::TeaPie.Variables.Variables();
+
+        CreateExpander(variables).Expand(content, "test.http");
+
+        variables.GetVariable<string>("PartnerLabel").Should().Be("free");
+    }
+
+    [Fact]
+    public void PersistATopLevelAssignedNumberAsDecimal()
+    {
+        const string content = "{% assign PartnerCount = 5 %}";
+        var variables = new global::TeaPie.Variables.Variables();
+
+        CreateExpander(variables).Expand(content, "test.http");
+
+        // Fluid.Core 2.31.0 represents numeric literals internally as NumberValue and unwraps them
+        // via FluidValue.ToObjectValue() as System.Decimal, regardless of the literal's own shape -
+        // this is a documented type-coercion detail of persisting a Fluid-computed value, not a bug.
+        variables.GetVariable<decimal>("PartnerCount").Should().Be(5m);
+    }
+
+    [Fact]
+    public void NotPersistAnInLoopAssignTarget()
+    {
+        const string content = "{% for item in Items %}{% assign label = item.Name %}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Items", new List<object> { new { Name = "A" } });
+
+        CreateExpander(variables).Expand(content, "test.http");
+
+        variables.ContainsVariable("label").Should().BeFalse();
+    }
+
+    [Fact]
+    public void DocumentThatANameSharedBetweenATopLevelAndAnInLoopAssignTargetCollidesAndPersistsTheLoopsLastValue()
+    {
+        // Known, documented name-collision risk (spec S5/S12): reusing the same identifier as both a
+        // top-level assign target and an in-loop assign target elsewhere in the file means the
+        // TemplateContext.Assigned hook's last-write-wins capture ends up persisting whichever one
+        // executed last during the render - here, the loop's final iteration. Avoid reusing names
+        // across top-level and in-loop assigns to sidestep this entirely.
+        const string content =
+            "{% assign shared = \"top-level\" %}" +
+            "{% for item in Items %}{% assign shared = item.Name %}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Items", new List<object> { new { Name = "last-item" } });
+
+        CreateExpander(variables).Expand(content, "test.http");
+
+        variables.GetVariable<string>("shared").Should().Be("last-item");
+    }
+
+    [Fact]
+    public void MakeATopLevelAssignInTheHttpSectionOfATpFileVisibleAfterExpansionForTheTestSectionToRead()
+    {
+        const string tpFileContent =
+            "--- INIT\n" +
+            "tp.SetVariable(\"Products\", new[] { new { Name = \"Widget\" } });\n" +
+            "\n" +
+            "--- HTTP\n" +
+            "{% assign ProductCount = Products.size %}\n" +
+            "### Seed products\n" +
+            "POST {{ApiBaseUrl}}/posts\n" +
+            "\n" +
+            "--- TEST\n" +
+            "var count = tp.GetVariable<int>(\"ProductCount\");\n" +
+            "\n" +
+            "--- END";
+
+        var context = new global::TeaPie.TestCases.TpParsingContext(tpFileContent, "cross-section-test");
+        new global::TeaPie.TestCases.TpFileParser().Parse(context);
+        var httpSection = context.Definitions[0].HttpContent;
+
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Products", new List<object> { new { Name = "Widget" } });
+
+        CreateExpander(variables).Expand(httpSection, "cross-section-test.tp");
+
+        variables.GetVariable<decimal>("ProductCount").Should().Be(1m);
+    }
+
+    [Fact]
+    public void ShareOneRenderStepBudgetAcrossMultipleSiblingLoopsInTheSameFileWithoutExceedingIt()
+    {
+        // Before this step, each {% for %} block got its own fresh 200,000-step budget (one
+        // TemplateContext/render call per block). The whole-file single-render architecture shares
+        // ONE 200,000-step budget across every loop and top-level tag in the file combined. Two small
+        // sibling loops, each far under the limit individually, must still succeed when combined.
+        const string content =
+            "{% for a in ItemsA %}{{ a.Name }}{% endfor %}" +
+            "{% for b in ItemsB %}{{ b.Name }}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("ItemsA", Enumerable.Range(1, 50).Select(i => (object)new { Name = $"A{i}" }).ToList());
+        variables.SetVariable("ItemsB", Enumerable.Range(1, 50).Select(i => (object)new { Name = $"B{i}" }).ToList());
+
         var act = () => CreateExpander(variables).Expand(content, "test.http");
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*rendered empty output*");
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void ThrowAParseErrorWithARawTagHintWhenBodyContainsUnknownFluidSyntax()
+    {
+        // Removing the old blocks.Count == 0 early return (any file containing "{%" is now fully
+        // Fluid-parsed, not just files with recognized {% for %} loops) means a JSON/text body that
+        // merely looks like it could contain a Fluid tag, but doesn't use real Fluid syntax, now
+        // throws a parse error instead of passing through untouched.
+        const string content = "{\"template\": \"Hello {% name %}!\"}";
+        var expander = CreateExpander();
+
+        var act = () => expander.Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*wrap it in*raw*");
+    }
+
+    [Fact]
+    public void RenderSuccessfullyWhenBodyCoincidentallyContainsValidFluidSyntax()
+    {
+        // Intentional consequence of Step E1's design, not a bug: per spec §11's approved scope,
+        // byte-identical passthrough is only guaranteed for files with NO Fluid tags at all. Any file
+        // containing "{%" is now fully Fluid-parsed, so a JSON/text body that coincidentally contains
+        // valid-looking Liquid syntax (here, a well-formed {% if %}/{% endif %}) is evaluated as a
+        // template and rendered, rather than being left alone as plain text. This is a real, documented
+        // behavior difference from before this branch.
+        const string content = "{\"tpl\":\"{% if user %}hi{% endif %}\"}";
+        var expander = CreateExpander();
+
+        var act = () => expander.Expand(content, "test.http");
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void EagerlyResolveALoopsSourceEvenWhenItIsGuardedByAFalseTopLevelIfCondition()
+    {
+        // Known limitation (not fixed in this step, tracked for Step E2): the pre-scan's zero-item/
+        // MaxExpandedRequests/source-resolution guards run before any Fluid evaluation, so they don't
+        // know a {% for %} sits inside a {% if %} whose condition will be false at render time. This
+        // defeats the "skip a request if X" motivating use case (spec S3 OQ#1) for exactly the
+        // for-inside-if composition - a real gap, pinned here so it's a tracked decision rather than
+        // an undiscovered surprise.
+        const string content = "{% if SeedEnabled %}{% for p in SeededPartners %}{{ p.Name }}{% endfor %}{% endif %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("SeedEnabled", false);
+        // Note: SeededPartners is deliberately never set.
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*collection variable 'SeededPartners'*was not found*");
     }
 }

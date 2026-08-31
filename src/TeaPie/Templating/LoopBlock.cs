@@ -5,4 +5,6 @@ internal sealed record LoopBlock(
     string SourceExpression,
     string Body,
     int StartIndex,
-    int Length);
+    int Length,
+    int SourceExpressionStartIndex,
+    int SourceExpressionRawLength);

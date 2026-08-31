@@ -5,13 +5,135 @@ namespace TeaPie.Tests.Templating;
 
 public class LoopBodyMaskerShould
 {
-    [Fact]
-    public void MaskTeaPieTokenButLeaveLoopVariableTokenUntouched()
+    private static string ApplyMask(string content)
     {
-        const string body = "POST {{ApiGatewayBaseUrl}}/companies { \"name\": \"{{ tenant.Name }}\" }";
-        var masker = new LoopBodyMasker();
+        var blocks = new LoopBlockScanner().FindLoopBlocks(content);
+        var edits = new LoopBodyMasker().FindMaskEdits(content, blocks);
+        return TextEditApplier.Apply(content, edits);
+    }
 
-        var result = masker.Mask(body, "tenant");
+    [Fact]
+    public void MaskATeaPieTokenThatDoesNotBelongToAnyLoopScope()
+    {
+        const string content = "{{ApiGatewayBaseUrl}}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
+    }
+
+    [Fact]
+    public void LeaveTheLoopVariableAndForloopTokensInsideTheirOwnLoopBodyUnmasked()
+    {
+        const string content = "{% for item in Items %}{{ item.Name }}{{ forloop.index }}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(content);
+    }
+
+    [Fact]
+    public void LeaveAnInLoopAssignTargetUnmaskedAnywhereInTheSameLoopBodyRegardlessOfOrder()
+    {
+        const string content =
+            "{% for item in Items %}{{ label }}{% assign label = item.Name %}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(content);
+    }
+
+    [Fact]
+    public void MaskATeaPieTokenInsideAnIfBlockThatDoesNotBelongToLoopScope()
+    {
+        const string content =
+            "{% for item in Items %}{% if item.Name == \"Acme\" %}{{ApiGatewayBaseUrl}}{% endif %}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(
+            "{% for item in Items %}{% if item.Name == \"Acme\" %}" +
+            "{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}{% endif %}{% endfor %}");
+    }
+
+    [Fact]
+    public void LeaveATopLevelAssignTargetUnmaskedAfterItsOwnDeclaration()
+    {
+        const string content = "{% assign gatewayName = \"gw\" %}{{ gatewayName }}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(content);
+    }
+
+    [Fact]
+    public void MaskATopLevelTokenReferencingAnAssignTargetDeclaredLaterInTheFile()
+    {
+        const string content = "{{ gatewayName }}{% assign gatewayName = \"gw\" %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(
+            "{% raw %}{{ gatewayName }}{% endraw %}{% assign gatewayName = \"gw\" %}");
+    }
+
+    [Fact]
+    public void LeaveATopLevelAssignTargetDeclaredBeforeALoopUnmaskedInsideThatLoopsBody()
+    {
+        const string content =
+            "{% assign gatewayName = \"gw\" %}{% for item in Items %}{{ gatewayName }}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(content);
+    }
+
+    [Fact]
+    public void NotLeakAnInLoopAssignTargetIntoASiblingLoopsBody()
+    {
+        const string content =
+            "{% for a in Items %}{% assign shared = a.Name %}{% endfor %}" +
+            "{% for b in Items %}{{ shared }}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(
+            "{% for a in Items %}{% assign shared = a.Name %}{% endfor %}" +
+            "{% for b in Items %}{% raw %}{{ shared }}{% endraw %}{% endfor %}");
+    }
+
+    [Fact]
+    public void NotLeakAnInLoopAssignTargetIntoTopLevelTextAfterTheLoopEnds()
+    {
+        const string content =
+            "{% for a in Items %}{% assign shared = a.Name %}{% endfor %}{{ shared }}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(
+            "{% for a in Items %}{% assign shared = a.Name %}{% endfor %}" +
+            "{% raw %}{{ shared }}{% endraw %}");
+    }
+
+    [Fact]
+    public void FindTopLevelAssignTargetNamesButNotInLoopOnes()
+    {
+        const string content =
+            "{% assign topLevel = \"x\" %}{% for item in Items %}{% assign inLoop = item.Name %}{% endfor %}";
+        var blocks = new LoopBlockScanner().FindLoopBlocks(content);
+
+        var names = new LoopBodyMasker().FindTopLevelAssignTargetNames(content, blocks);
+
+        names.Should().BeEquivalentTo(new[] { "topLevel" });
+    }
+
+    [Fact]
+    public void MaskATeaPieTokenButLeaveTheLoopVariableTokenUntouchedWhenBothAppearInTheSameBody()
+    {
+        const string content =
+            "{% for tenant in Items %}POST {{ApiGatewayBaseUrl}}/companies { \"name\": \"{{ tenant.Name }}\" }{% endfor %}";
+
+        var result = ApplyMask(content);
 
         result.Should().Contain("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
         result.Should().Contain("{{ tenant.Name }}");
@@ -19,26 +141,14 @@ public class LoopBodyMaskerShould
     }
 
     [Fact]
-    public void LeaveForloopTokenUntouched()
+    public void NotSplitADynamicNamingExpressionAtEmbeddedLiteralBraces()
     {
-        const string body = "### item {{ forloop.index }}";
-        var masker = new LoopBodyMasker();
-
-        var result = masker.Mask(body, "partner");
-
-        result.Should().Be(body);
-    }
-
-    [Fact]
-    public void NotSplitDynamicNamingExpressionAtEmbeddedLiteralBraces()
-    {
-        const string body =
-            "POST {{ApiGatewayBaseUrl}}/companies/" +
+        const string content =
+            "{% for tenant in Items %}POST {{ApiGatewayBaseUrl}}/companies/" +
             "{{ forloop.index | prepend: \"{{Temp.Attachments.CompanyId_\" | append: \"}}\" }}" +
-            "/licenses";
-        var masker = new LoopBodyMasker();
+            "/licenses{% endfor %}";
 
-        var result = masker.Mask(body, "tenant");
+        var result = ApplyMask(content);
 
         result.Should().Contain(
             "{{ forloop.index | prepend: \"{{Temp.Attachments.CompanyId_\" | append: \"}}\" }}");
@@ -46,67 +156,66 @@ public class LoopBodyMaskerShould
     }
 
     [Fact]
-    public void MaskVariableThatOnlySharesAPrefixWithTheLoopVariable()
+    public void MaskAVariableThatOnlySharesAPrefixWithTheLoopVariable()
     {
-        const string body = "{{tenantSomethingElse}}";
-        var masker = new LoopBodyMasker();
+        const string content = "{% for tenant in Items %}{{tenantSomethingElse}}{% endfor %}";
 
-        var result = masker.Mask(body, "tenant");
+        var result = ApplyMask(content);
 
-        result.Should().Be("{% raw %}{{tenantSomethingElse}}{% endraw %}");
+        result.Should().Contain("{% raw %}{{tenantSomethingElse}}{% endraw %}");
     }
 
     [Fact]
     public void NotDoubleWrapATeaPieTokenAlreadyInsideAUserAuthoredRawBlock()
     {
-        const string body = "{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}";
-        var masker = new LoopBodyMasker();
+        const string content = "{% for tenant in Items %}{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}{% endfor %}";
 
-        var result = masker.Mask(body, "tenant");
+        var result = ApplyMask(content);
 
-        result.Should().Be(body);
+        result.Should().Be(content);
     }
 
     [Fact]
     public void LeaveALoopVariableTokenUntouchedInsideAUserAuthoredRawBlock()
     {
-        const string body = "{% raw %}{{ tenant.Name }}{% endraw %}";
-        var masker = new LoopBodyMasker();
+        const string content = "{% for tenant in Items %}{% raw %}{{ tenant.Name }}{% endraw %}{% endfor %}";
 
-        var result = masker.Mask(body, "tenant");
+        var result = ApplyMask(content);
 
-        result.Should().Be(body);
+        result.Should().Be(content);
     }
 
     [Fact]
-    public void StillMaskATeaPieTokenOutsideAnUnrelatedRawBlockInTheSameBody()
+    public void StillMaskATeaPieTokenOutsideAnUnrelatedRawBlockInTheSameLoopBody()
     {
-        const string body = "{% raw %}{{ tenant.Name }}{% endraw %}{{ApiGatewayBaseUrl}}";
-        var masker = new LoopBodyMasker();
+        const string content =
+            "{% for tenant in Items %}{% raw %}{{ tenant.Name }}{% endraw %}{{ApiGatewayBaseUrl}}{% endfor %}";
 
-        var result = masker.Mask(body, "tenant");
+        var result = ApplyMask(content);
 
-        result.Should().Be("{% raw %}{{ tenant.Name }}{% endraw %}{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
+        result.Should().Be(
+            "{% for tenant in Items %}{% raw %}{{ tenant.Name }}{% endraw %}" +
+            "{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}{% endfor %}");
     }
 
     [Fact]
-    public void LeaveAnAssignedVariableTokenUntouched()
+    public void LeaveAnAssignedVariableTokenUntouchedAlongsideTheLoopVariable()
     {
-        const string body = "{% assign greeting = \"Hello\" %}{{ greeting }}, {{ tenant.Name }}!";
-        var masker = new LoopBodyMasker();
+        const string content =
+            "{% for tenant in Items %}{% assign greeting = \"Hello\" %}{{ greeting }}, {{ tenant.Name }}!{% endfor %}";
 
-        var result = masker.Mask(body, "tenant");
+        var result = ApplyMask(content);
 
-        result.Should().Be(body);
+        result.Should().Be(content);
     }
 
     [Fact]
     public void StillMaskATeaPieTokenNotMatchingAnyAssignedName()
     {
-        const string body = "{% assign greeting = \"Hello\" %}{{ greeting }}{{ApiGatewayBaseUrl}}";
-        var masker = new LoopBodyMasker();
+        const string content =
+            "{% for tenant in Items %}{% assign greeting = \"Hello\" %}{{ greeting }}{{ApiGatewayBaseUrl}}{% endfor %}";
 
-        var result = masker.Mask(body, "tenant");
+        var result = ApplyMask(content);
 
         result.Should().Contain("{{ greeting }}");
         result.Should().Contain("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
@@ -115,10 +224,9 @@ public class LoopBodyMaskerShould
     [Fact]
     public void MaskAVariableThatOnlySharesAPrefixWithAnAssignedName()
     {
-        const string body = "{% assign greeting = \"Hi\" %}{{greetingSomethingElse}}";
-        var masker = new LoopBodyMasker();
+        const string content = "{% for tenant in Items %}{% assign greeting = \"Hi\" %}{{greetingSomethingElse}}{% endfor %}";
 
-        var result = masker.Mask(body, "tenant");
+        var result = ApplyMask(content);
 
         result.Should().Contain("{% raw %}{{greetingSomethingElse}}{% endraw %}");
     }
@@ -126,10 +234,9 @@ public class LoopBodyMaskerShould
     [Fact]
     public void LeaveATeaPieLookingTokenInsideAnAssignTagsStringLiteralUntouched()
     {
-        const string body = "{% assign url = \"{{ApiGatewayBaseUrl}}\" %}{{ url }}";
-        var masker = new LoopBodyMasker();
+        const string content = "{% for tenant in Items %}{% assign url = \"{{ApiGatewayBaseUrl}}\" %}{{ url }}{% endfor %}";
 
-        var result = masker.Mask(body, "tenant");
+        var result = ApplyMask(content);
 
         result.Should().Contain("{% assign url = \"{{ApiGatewayBaseUrl}}\" %}");
         result.Should().NotContain("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
@@ -138,34 +245,22 @@ public class LoopBodyMaskerShould
     [Fact]
     public void NotTreatAnAssignInsideAUserAuthoredRawBlockAsABoundName()
     {
-        const string body = "{% raw %}{% assign greeting = \"Hi\" %}{% endraw %}{{ greeting }}";
-        var masker = new LoopBodyMasker();
+        const string content =
+            "{% for tenant in Items %}{% raw %}{% assign greeting = \"Hi\" %}{% endraw %}{{ greeting }}{% endfor %}";
 
-        var result = masker.Mask(body, "tenant");
+        var result = ApplyMask(content);
 
         result.Should().Contain("{% raw %}{% assign greeting = \"Hi\" %}{% endraw %}");
         result.Should().Contain("{% raw %}{{ greeting }}{% endraw %}");
     }
 
     [Fact]
-    public void StillMaskATeaPieTokenInsideAnIfBlockThatDoesNotBelongToLoopScope()
-    {
-        const string body = "{% if tenant.Name == \"Acme\" %}{{ApiGatewayBaseUrl}}{% endif %}";
-        var masker = new LoopBodyMasker();
-
-        var result = masker.Mask(body, "tenant");
-
-        result.Should().Contain("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
-    }
-
-    [Fact]
     public void LeaveALoopScopedTokenInsideAnIfBlockUntouched()
     {
-        const string body = "{% if forloop.first %}{{ tenant.Name }}{% endif %}";
-        var masker = new LoopBodyMasker();
+        const string content = "{% for tenant in Items %}{% if forloop.first %}{{ tenant.Name }}{% endif %}{% endfor %}";
 
-        var result = masker.Mask(body, "tenant");
+        var result = ApplyMask(content);
 
-        result.Should().Be(body);
+        result.Should().Be(content);
     }
 }

@@ -32,7 +32,7 @@ internal sealed class ExpandTemplatesStep(
             testCaseExecutionContext.TestCase.RequestsFile.RelativePath,
             originalLength,
             expandedLength,
-            originalLength == expandedLength ? "unchanged" : "loop(s) expanded");
+            originalLength == expandedLength ? "unchanged" : "template(s) expanded");
 
     private static void LogExpandedContent(
         ApplicationContext context, TestCaseExecutionContext testCaseExecutionContext, string expandedContent)

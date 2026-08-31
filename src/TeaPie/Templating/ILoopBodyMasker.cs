@@ -2,5 +2,7 @@ namespace TeaPie.Templating;
 
 internal interface ILoopBodyMasker
 {
-    string Mask(string body, string loopVariableName);
+    IReadOnlyList<TextEdit> FindMaskEdits(string content, IReadOnlyList<LoopBlock> blocks);
+
+    IReadOnlySet<string> FindTopLevelAssignTargetNames(string content, IReadOnlyList<LoopBlock> blocks);
 }

@@ -34,11 +34,14 @@ internal sealed partial class LoopBlockScanner : ILoopBlockScanner
             }
 
             var loopVariableName = openMatch.Groups[2].Value;
-            var sourceExpression = openMatch.Groups[3].Value.Trim();
+            var sourceExpressionGroup = openMatch.Groups[3];
+            var sourceExpression = sourceExpressionGroup.Value.Trim();
             var body = content[bodyStart..closeMatch.Index];
             var length = closeMatch.Index + closeMatch.Length - openMatch.Index;
 
-            blocks.Add(new LoopBlock(loopVariableName, sourceExpression, body, openMatch.Index, length));
+            blocks.Add(new LoopBlock(
+                loopVariableName, sourceExpression, body, openMatch.Index, length,
+                sourceExpressionGroup.Index, sourceExpressionGroup.Length));
 
             position = closeMatch.Index + closeMatch.Length;
         }

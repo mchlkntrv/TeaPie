@@ -17,6 +17,8 @@ public class LoopBlockScannerShould
         blocks[0].LoopVariableName.Should().Be("car");
         blocks[0].SourceExpression.Should().Be("Cars");
         blocks[0].Body.Should().Be("BODY");
+        blocks[0].SourceExpressionStartIndex.Should().Be(content.IndexOf("Cars", StringComparison.Ordinal));
+        blocks[0].SourceExpressionRawLength.Should().Be("Cars".Length);
     }
 
     [Fact]

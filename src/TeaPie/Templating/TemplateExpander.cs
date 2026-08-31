@@ -1,5 +1,5 @@
-using System.Text;
 using Fluid;
+using Fluid.Values;
 using TeaPie.Variables;
 
 namespace TeaPie.Templating;
@@ -14,7 +14,7 @@ internal sealed class TemplateExpander(
     private const int MaxExpandedRequests = 1000;
     private const int MaxRenderSteps = 200000;
 
-    private const string SourceAlias = "__teapie_loop_source";
+    private const string SourceAliasPrefix = "__teapie_loop_source_";
 
     private static readonly FluidParser Parser = new();
 
@@ -26,50 +26,47 @@ internal sealed class TemplateExpander(
         }
 
         var blocks = scanner.FindLoopBlocks(content);
-        if (blocks.Count == 0)
+        var sources = new LoopSource?[blocks.Count];
+        var edits = new List<TextEdit>();
+
+        for (var i = 0; i < blocks.Count; i++)
         {
-            return content;
+            var block = blocks[i];
+            var source = sourceResolver.Resolve(block.SourceExpression);
+            sources[i] = source;
+
+            if (source.ItemCount == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Templating error in '{filePath}': loop over '{block.SourceExpression}' produced zero items.");
+            }
+
+            if (source.ItemCount > MaxExpandedRequests)
+            {
+                throw new InvalidOperationException(
+                    $"Templating error in '{filePath}': loop over '{block.SourceExpression}' would expand to " +
+                    $"{source.ItemCount} requests, exceeding the maximum of {MaxExpandedRequests}.");
+            }
+
+            if (source.Collection is not null)
+            {
+                edits.Add(new TextEdit(
+                    block.SourceExpressionStartIndex, block.SourceExpressionRawLength, $"{SourceAliasPrefix}{i}"));
+            }
         }
 
-        var result = new StringBuilder();
-        var cursor = 0;
+        edits.AddRange(masker.FindMaskEdits(content, blocks));
 
-        foreach (var block in blocks)
-        {
-            result.Append(content, cursor, block.StartIndex - cursor);
-            result.Append(ExpandBlock(block, filePath));
-            cursor = block.StartIndex + block.Length;
-        }
+        var topLevelNames = masker.FindTopLevelAssignTargetNames(content, blocks);
 
-        result.Append(content, cursor, content.Length - cursor);
-        return result.ToString();
-    }
+        var transformed = TextEditApplier.Apply(content, edits);
 
-    private string ExpandBlock(LoopBlock block, string filePath)
-    {
-        var source = sourceResolver.Resolve(block.SourceExpression);
-
-        if (source.ItemCount == 0)
+        if (!Parser.TryParse(transformed, out var template, out var parseError))
         {
             throw new InvalidOperationException(
-                $"Templating error in '{filePath}': loop over '{block.SourceExpression}' produced zero items.");
-        }
-
-        if (source.ItemCount > MaxExpandedRequests)
-        {
-            throw new InvalidOperationException(
-                $"Templating error in '{filePath}': loop over '{block.SourceExpression}' would expand to " +
-                $"{source.ItemCount} requests, exceeding the maximum of {MaxExpandedRequests}.");
-        }
-
-        var maskedBody = masker.Mask(block.Body, block.LoopVariableName);
-        var forSource = source.Collection is not null ? SourceAlias : block.SourceExpression;
-        var reconstructed = $"{{% for {block.LoopVariableName} in {forSource} %}}{maskedBody}{{% endfor %}}";
-
-        if (!Parser.TryParse(reconstructed, out var template, out var parseError))
-        {
-            throw new InvalidOperationException(
-                $"Templating error in '{filePath}': failed to parse loop over '{block.SourceExpression}': {parseError}");
+                $"Templating error in '{filePath}': failed to parse template: {parseError}. If this file " +
+                "contains literal '{{%' text that is not a TeaPie template tag, wrap it in " +
+                "'{{% raw %}}...{{% endraw %}}'.");
         }
 
         var options = new TemplateOptions
@@ -78,15 +75,29 @@ internal sealed class TemplateExpander(
             MaxSteps = MaxRenderSteps
         };
         options.Undefined = name => throw new InvalidOperationException(
-            $"Templating error in '{filePath}': '{name}' is undefined while expanding the loop over '{block.SourceExpression}'.");
+            $"Templating error in '{filePath}': '{name}' is undefined.");
 
         var model = new Dictionary<string, object?>(modelBuilder.Build(variables));
-        if (source.Collection is not null)
+        for (var i = 0; i < blocks.Count; i++)
         {
-            model[SourceAlias] = source.Collection;
+            if (sources[i]!.Value.Collection is not null)
+            {
+                model[$"{SourceAliasPrefix}{i}"] = sources[i]!.Value.Collection;
+            }
         }
 
         var context = new TemplateContext(model, options);
+
+        var topLevelAssignments = new Dictionary<string, FluidValue>(StringComparer.Ordinal);
+        context.Assigned = (identifier, value, _) =>
+        {
+            if (topLevelNames.Contains(identifier))
+            {
+                topLevelAssignments[identifier] = value;
+            }
+
+            return new ValueTask<FluidValue>(value);
+        };
 
         string rendered;
         try
@@ -96,18 +107,15 @@ internal sealed class TemplateExpander(
         catch (InvalidOperationException ex) when (IsRenderStepLimitExceeded(ex))
         {
             throw new InvalidOperationException(
-                $"Templating error in '{filePath}': loop over '{block.SourceExpression}' ({source.ItemCount} " +
-                $"item(s)) exceeded the maximum of {MaxRenderSteps} rendering steps - likely too many '{{ }}' " +
-                "expressions per item rather than a large collection (collection size is capped separately). " +
-                "Check the loop body for repeated expressions, or split it into smaller loops.", ex);
+                $"Templating error in '{filePath}': template exceeded the maximum of {MaxRenderSteps} " +
+                "rendering steps across the whole file - likely too many '{{ }}' " +
+                "expressions per item rather than a large collection (collection size is capped separately " +
+                "per loop). Check the file for repeated expressions, or split it into smaller loops.", ex);
         }
 
-        if (!string.IsNullOrWhiteSpace(block.Body) && rendered.Length == 0)
+        foreach (var (name, value) in topLevelAssignments)
         {
-            throw new InvalidOperationException(
-                $"Templating error in '{filePath}': loop over '{block.SourceExpression}' resolved " +
-                $"{source.ItemCount} item(s) but rendered empty output. This indicates a templating " +
-                "engine issue (e.g. a naming collision) rather than a genuinely empty collection.");
+            variables.SetVariable(name, value.ToObjectValue());
         }
 
         return rendered;
