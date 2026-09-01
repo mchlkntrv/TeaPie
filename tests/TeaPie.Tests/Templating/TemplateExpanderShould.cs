@@ -618,6 +618,36 @@ public class TemplateExpanderShould
     }
 
     [Fact]
+    public void ResolveAnAssignRightHandSideReferencingAHyphenatedTeaPieVariableName()
+    {
+        // Unlike dotted names (see the dotted-name test above), a hyphen in a TeaPie variable name
+        // does NOT split into a subtraction expression here: Fluid 2.31.0's identifier grammar accepts
+        // '-' as a valid identifier character, so "my-var" parses as one bare identifier and resolves
+        // against the bridge model exactly like any other name. Verified empirically.
+        const string content = "{% for tenant in Tenants %}[{% assign x = my-var %}{{ x }}]{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { } });
+        variables.SetVariable("my-var", "hello");
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("[hello]");
+    }
+
+    [Fact]
+    public void TreatAHyphenatedTeaPieVariableNameAsTruthyInAnIfCondition()
+    {
+        const string content = "{% for tenant in Tenants %}{% if my-flag %}YES{% else %}NO{% endif %}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { } });
+        variables.SetVariable("my-flag", true);
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("YES");
+    }
+
+    [Fact]
     public void RenderEmptyWithoutThrowingWhenAnAssignRightHandSideResolvesToAVariableExplicitlySetToNull()
     {
         const string content = "{% for tenant in Tenants %}[{% assign x = MaybeNull %}{{ x }}]{% endfor %}";
