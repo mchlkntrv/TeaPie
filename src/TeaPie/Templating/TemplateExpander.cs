@@ -1,10 +1,12 @@
+using System.Text.RegularExpressions;
 using Fluid;
 using Fluid.Values;
+using TeaPie.Http.Parsing;
 using TeaPie.Variables;
 
 namespace TeaPie.Templating;
 
-internal sealed class TemplateExpander(
+internal sealed partial class TemplateExpander(
     ILoopBlockScanner scanner,
     ILoopBodyMasker masker,
     ICollectionSourceResolver sourceResolver,
@@ -15,6 +17,9 @@ internal sealed class TemplateExpander(
     private const int MaxRenderSteps = 200000;
 
     private const string SourceAliasPrefix = "__teapie_loop_source_";
+    private const string TreeStartMarkerPrefix = "\u0000__teapie_loop_tree_start_";
+    private const string TreeEndMarkerPrefix = "\u0000__teapie_loop_tree_end_";
+    private const string MarkerSuffix = "__\u0000";
 
     private static readonly FluidParser Parser = new();
 
@@ -32,6 +37,12 @@ internal sealed class TemplateExpander(
         for (var i = 0; i < blocks.Count; i++)
         {
             var block = blocks[i];
+
+            if (IsDynamicSource(i, blocks))
+            {
+                continue;
+            }
+
             var source = sourceResolver.Resolve(block.SourceExpression);
             sources[i] = source;
 
@@ -41,7 +52,7 @@ internal sealed class TemplateExpander(
                     $"Templating error in '{filePath}': loop over '{block.SourceExpression}' produced zero items.");
             }
 
-            if (source.ItemCount > MaxExpandedRequests)
+            if (LoopBlockHierarchy.IsStandaloneBlock(i, blocks) && source.ItemCount > MaxExpandedRequests)
             {
                 throw new InvalidOperationException(
                     $"Templating error in '{filePath}': loop over '{block.SourceExpression}' would expand to " +
@@ -53,6 +64,17 @@ internal sealed class TemplateExpander(
                 edits.Add(new TextEdit(
                     block.SourceExpressionStartIndex, block.SourceExpressionRawLength, $"{SourceAliasPrefix}{i}"));
             }
+        }
+
+        var nestingRootIndices = Enumerable.Range(0, blocks.Count)
+            .Where(i => LoopBlockHierarchy.IsNestingRoot(i, blocks))
+            .ToList();
+
+        foreach (var rootIndex in nestingRootIndices)
+        {
+            var block = blocks[rootIndex];
+            edits.Add(new TextEdit(block.StartIndex, 0, $"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}"));
+            edits.Add(new TextEdit(block.StartIndex + block.Length, 0, $"{TreeEndMarkerPrefix}{rootIndex}{MarkerSuffix}"));
         }
 
         edits.AddRange(masker.FindMaskEdits(content, blocks));
@@ -80,9 +102,9 @@ internal sealed class TemplateExpander(
         var model = new Dictionary<string, object?>(modelBuilder.Build(variables));
         for (var i = 0; i < blocks.Count; i++)
         {
-            if (sources[i]!.Value.Collection is not null)
+            if (sources[i] is { Collection: not null } source)
             {
-                model[$"{SourceAliasPrefix}{i}"] = sources[i]!.Value.Collection;
+                model[$"{SourceAliasPrefix}{i}"] = source.Collection;
             }
         }
 
@@ -113,6 +135,41 @@ internal sealed class TemplateExpander(
                 "per loop). Check the file for repeated expressions, or split it into smaller loops.", ex);
         }
 
+        foreach (var rootIndex in nestingRootIndices)
+        {
+            var startMarker = $"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}";
+            var endMarker = $"{TreeEndMarkerPrefix}{rootIndex}{MarkerSuffix}";
+            var startIndex = rendered.IndexOf(startMarker, StringComparison.Ordinal);
+            var endIndex = rendered.IndexOf(endMarker, StringComparison.Ordinal);
+
+            if (startIndex < 0 || endIndex < 0)
+            {
+                // The nesting-root tree sits inside a top-level if/unless condition that was
+                // false, so Fluid never rendered the block (or its markers) at all. Nothing to count.
+                continue;
+            }
+
+            var segment = rendered[(startIndex + startMarker.Length)..endIndex];
+
+            var requestCount = RequestSeparatorRegex().Split(segment)
+                .Count(fragment => RequestMethodAndUriLineRegex().IsMatch(fragment));
+
+            if (requestCount > MaxExpandedRequests)
+            {
+                throw new InvalidOperationException(
+                    $"Templating error in '{filePath}': the nested loop tree would expand to {requestCount} " +
+                    $"requests combined across all nesting levels, exceeding the maximum of {MaxExpandedRequests} " +
+                    $"(root loop over '{blocks[rootIndex].SourceExpression}').");
+            }
+        }
+
+        foreach (var rootIndex in nestingRootIndices)
+        {
+            rendered = rendered
+                .Replace($"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}", string.Empty, StringComparison.Ordinal)
+                .Replace($"{TreeEndMarkerPrefix}{rootIndex}{MarkerSuffix}", string.Empty, StringComparison.Ordinal);
+        }
+
         foreach (var (name, value) in topLevelAssignments)
         {
             variables.SetVariable(name, value.ToObjectValue());
@@ -123,4 +180,18 @@ internal sealed class TemplateExpander(
 
     private static bool IsRenderStepLimitExceeded(InvalidOperationException ex)
         => ex.Message.Contains("recursion", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsDynamicSource(int blockIndex, IReadOnlyList<LoopBlock> blocks)
+    {
+        var block = blocks[blockIndex];
+
+        return LoopBlockHierarchy.GetAncestorIndices(blockIndex, blocks).Exists(ancestorIndex =>
+            FluidExpressionIdentifier.StartsWithIdentifier(block.SourceExpression, blocks[ancestorIndex].LoopVariableName));
+    }
+
+    [GeneratedRegex(HttpFileParserConstants.HttpRequestSeparatorDirectiveLineRegex)]
+    private static partial Regex RequestSeparatorRegex();
+
+    [GeneratedRegex(HttpFileParserConstants.RequestMethodAndUriLinePattern, RegexOptions.IgnoreCase)]
+    private static partial Regex RequestMethodAndUriLineRegex();
 }

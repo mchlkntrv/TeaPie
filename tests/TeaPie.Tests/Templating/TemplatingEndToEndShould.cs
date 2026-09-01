@@ -655,4 +655,27 @@ public class TemplatingEndToEndShould
             "\r\n" +
             "\n");
     }
+
+    [Fact]
+    public void RenderTheNestedLoopsFixtureWithCorrectOuterInnerIndexing()
+    {
+        var fixturePath = Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "templating-demo", "Tests", "014-Nested-Loops", "014-nested-loops-req.http");
+        var original = File.ReadAllText(fixturePath);
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[]
+        {
+            new { Name = "Acme", Licenses = new[] { "BASIC", "PRO" } },
+            new { Name = "Globex", Licenses = new[] { "BASIC" } }
+        });
+
+        var result = CreateExpander(variables).Expand(original, fixturePath);
+
+        result.Should().Contain("### Create license 1.1: Acme / BASIC");
+        result.Should().Contain("### Create license 1.2: Acme / PRO");
+        result.Should().Contain("### Create license 2.1: Globex / BASIC");
+        result.Should().Contain("# @name CreateLicense1_1");
+        result.Should().Contain("# @name CreateLicense2_1");
+    }
 }

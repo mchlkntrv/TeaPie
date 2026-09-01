@@ -6,44 +6,46 @@ internal sealed partial class LoopBlockScanner : ILoopBlockScanner
 {
     public IReadOnlyList<LoopBlock> FindLoopBlocks(string content)
     {
-        List<LoopBlock> blocks = [];
-        var position = 0;
+        var tags = ForTagRegex().Matches(content).Cast<Match>().Select(m => (Match: m, IsFor: true))
+            .Concat(EndForTagRegex().Matches(content).Cast<Match>().Select(m => (Match: m, IsFor: false)))
+            .OrderBy(t => t.Match.Index)
+            .ToList();
 
-        while (true)
+        var stack = new Stack<Match>();
+        var blocks = new List<LoopBlock>();
+
+        foreach (var (match, isFor) in tags)
         {
-            var openMatch = ForTagRegex().Match(content, position);
-            if (!openMatch.Success)
+            if (isFor)
             {
-                break;
+                stack.Push(match);
+                continue;
             }
 
+            if (stack.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Templating error: found '{match.Value}' without a matching '{{% for %}}'.");
+            }
+
+            var openMatch = stack.Pop();
             var bodyStart = openMatch.Index + openMatch.Length;
-            var closeMatch = EndForTagRegex().Match(content, bodyStart);
-            var nextOpenMatch = ForTagRegex().Match(content, bodyStart);
-
-            if (!closeMatch.Success)
-            {
-                throw new InvalidOperationException(
-                    $"Templating error: missing '{{% endfor %}}' for the loop starting with '{openMatch.Value}'.");
-            }
-
-            if (nextOpenMatch.Success && nextOpenMatch.Index < closeMatch.Index)
-            {
-                throw new InvalidOperationException(
-                    "Templating error: nested '{% for %}' loops are not supported.");
-            }
-
             var loopVariableName = openMatch.Groups[2].Value;
             var sourceExpressionGroup = openMatch.Groups[3];
             var sourceExpression = sourceExpressionGroup.Value.Trim();
-            var body = content[bodyStart..closeMatch.Index];
-            var length = closeMatch.Index + closeMatch.Length - openMatch.Index;
+            var body = content[bodyStart..match.Index];
+            var length = match.Index + match.Length - openMatch.Index;
 
             blocks.Add(new LoopBlock(
                 loopVariableName, sourceExpression, body, openMatch.Index, length,
                 sourceExpressionGroup.Index, sourceExpressionGroup.Length));
+        }
 
-            position = closeMatch.Index + closeMatch.Length;
+        if (stack.Count > 0)
+        {
+            var unclosed = stack.Peek();
+            throw new InvalidOperationException(
+                $"Templating error: missing '{{% endfor %}}' for the loop starting with '{unclosed.Value}'.");
         }
 
         EnsureNoResidualForTags(content, blocks);

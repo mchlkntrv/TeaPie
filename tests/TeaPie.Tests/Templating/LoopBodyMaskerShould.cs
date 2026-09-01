@@ -263,4 +263,73 @@ public class LoopBodyMaskerShould
 
         result.Should().Be(content);
     }
+
+    [Fact]
+    public void LeaveTheOuterLoopVariableUnmaskedInsideANestedInnerLoopBody()
+    {
+        const string content =
+            "{% for outer in Outers %}{% for inner in outer.Items %}" +
+            "{{ outer.Name }}{{ inner.Value }}{{ forloop.index }}" +
+            "{% endfor %}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(content);
+    }
+
+    [Fact]
+    public void LeaveAnOuterLoopAssignTargetUnmaskedInsideANestedInnerLoopBody()
+    {
+        const string content =
+            "{% for outer in Outers %}{% assign label = outer.Name %}" +
+            "{% for inner in outer.Items %}{{ label }}{% endfor %}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(content);
+    }
+
+    [Fact]
+    public void MaskAReferenceToAnInnerLoopAssignTargetAfterTheInnerLoopHasEnded()
+    {
+        const string content =
+            "{% for outer in Outers %}{% for inner in outer.Items %}{% assign flag = true %}{% endfor %}" +
+            "{{ flag }}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(
+            "{% for outer in Outers %}{% for inner in outer.Items %}{% assign flag = true %}{% endfor %}" +
+            "{% raw %}{{ flag }}{% endraw %}{% endfor %}");
+    }
+
+    [Fact]
+    public void NotLeakAnInnerLoopAssignTargetToASiblingInnerLoop()
+    {
+        const string content =
+            "{% for outer in Outers %}" +
+            "{% for a in outer.As %}{% assign flag = true %}{% endfor %}" +
+            "{% for b in outer.Bs %}{{ flag }}{% endfor %}" +
+            "{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(
+            "{% for outer in Outers %}" +
+            "{% for a in outer.As %}{% assign flag = true %}{% endfor %}" +
+            "{% for b in outer.Bs %}{% raw %}{{ flag }}{% endraw %}{% endfor %}" +
+            "{% endfor %}");
+    }
+
+    [Fact]
+    public void LeaveATopLevelAssignTargetDeclaredBeforeANestedLoopUnmaskedAtBothNestingLevels()
+    {
+        const string content =
+            "{% assign gatewayName = \"gw\" %}" +
+            "{% for outer in Outers %}{% for inner in outer.Items %}{{ gatewayName }}{% endfor %}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(content);
+    }
 }

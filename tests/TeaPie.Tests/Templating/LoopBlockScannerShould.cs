@@ -47,14 +47,46 @@ public class LoopBlockScannerShould
     }
 
     [Fact]
-    public void ThrowWhenLoopsAreNested()
+    public void FindNestedLoopBlocksInsteadOfRejectingThem()
     {
-        const string content = "{% for a in As %}{% for b in Bs %}BODY{% endfor %}{% endfor %}";
+        const string content = "{% for outer in Outers %}{% for inner in Inners %}BODY{% endfor %}{% endfor %}";
+        var scanner = new LoopBlockScanner();
+
+        var blocks = scanner.FindLoopBlocks(content);
+
+        blocks.Should().HaveCount(2);
+        var outer = blocks.Single(b => b.LoopVariableName == "outer");
+        var inner = blocks.Single(b => b.LoopVariableName == "inner");
+        inner.SourceExpression.Should().Be("Inners");
+        inner.Body.Should().Be("BODY");
+        outer.SourceExpression.Should().Be("Outers");
+        outer.StartIndex.Should().BeLessThan(inner.StartIndex);
+        (inner.StartIndex + inner.Length).Should().BeLessThanOrEqualTo(outer.StartIndex + outer.Length);
+    }
+
+    [Fact]
+    public void FindDeeplyNestedLoopBlocksAcrossThreeLevels()
+    {
+        const string content =
+            "{% for a in As %}{% for b in Bs %}{% for c in Cs %}BODY{% endfor %}{% endfor %}{% endfor %}";
+        var scanner = new LoopBlockScanner();
+
+        var blocks = scanner.FindLoopBlocks(content);
+
+        blocks.Should().HaveCount(3);
+        blocks.Select(b => b.LoopVariableName).Should().BeEquivalentTo(["a", "b", "c"]);
+        blocks.Single(b => b.LoopVariableName == "c").Body.Should().Be("BODY");
+    }
+
+    [Fact]
+    public void ThrowIdentifyingTheOutermostUnclosedLoopWhenOnlyItIsMissingAnEndfor()
+    {
+        const string content = "{% for a in As %}{% for b in Bs %}BODY{% endfor %}";
         var scanner = new LoopBlockScanner();
 
         var act = () => scanner.FindLoopBlocks(content);
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*nested*");
+        act.Should().Throw<InvalidOperationException>().WithMessage("*endfor*for a in As*");
     }
 
     [Fact]

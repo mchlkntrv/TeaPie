@@ -69,15 +69,8 @@ internal sealed partial class LoopBodyMasker : ILoopBodyMasker
 
     private static int? FindEnclosingBlockIndex(int position, IReadOnlyList<LoopBlock> blocks)
     {
-        for (var i = 0; i < blocks.Count; i++)
-        {
-            if (position >= blocks[i].StartIndex && position < blocks[i].StartIndex + blocks[i].Length)
-            {
-                return i;
-            }
-        }
-
-        return null;
+        var enclosing = LoopBlockHierarchy.GetEnclosingBlockIndicesInnermostFirst(position, blocks);
+        return enclosing.Count > 0 ? enclosing[0] : null;
     }
 
     private static bool BelongsToScope(
@@ -87,31 +80,42 @@ internal sealed partial class LoopBodyMasker : ILoopBodyMasker
         IReadOnlyList<LoopBlock> blocks,
         List<AssignOccurrence> assignOccurrences)
     {
+        if (FluidExpressionIdentifier.StartsWithIdentifier(expression, "forloop"))
+        {
+            return true;
+        }
+
         if (enclosingBlockIndex is int blockIndex)
         {
-            var block = blocks[blockIndex];
+            var chain = new List<int> { blockIndex };
+            chain.AddRange(LoopBlockHierarchy.GetAncestorIndices(blockIndex, blocks));
 
-            if (StartsWithIdentifier(expression, block.LoopVariableName) || StartsWithIdentifier(expression, "forloop"))
+            foreach (var ancestorIndex in chain)
             {
-                return true;
+                if (FluidExpressionIdentifier.StartsWithIdentifier(expression, blocks[ancestorIndex].LoopVariableName))
+                {
+                    return true;
+                }
+
+                if (assignOccurrences.Exists(occurrence =>
+                    occurrence.EnclosingBlockIndex == ancestorIndex
+                    && FluidExpressionIdentifier.StartsWithIdentifier(expression, occurrence.Name)))
+                {
+                    return true;
+                }
             }
 
-            if (assignOccurrences.Exists(occurrence =>
-                occurrence.EnclosingBlockIndex == blockIndex && StartsWithIdentifier(expression, occurrence.Name)))
-            {
-                return true;
-            }
-
+            var outermostStart = blocks[chain[^1]].StartIndex;
             return assignOccurrences.Exists(occurrence =>
                 occurrence.EnclosingBlockIndex is null
-                && occurrence.Position < block.StartIndex
-                && StartsWithIdentifier(expression, occurrence.Name));
+                && occurrence.Position < outermostStart
+                && FluidExpressionIdentifier.StartsWithIdentifier(expression, occurrence.Name));
         }
 
         return assignOccurrences.Exists(occurrence =>
             occurrence.EnclosingBlockIndex is null
             && occurrence.Position < position
-            && StartsWithIdentifier(expression, occurrence.Name));
+            && FluidExpressionIdentifier.StartsWithIdentifier(expression, occurrence.Name));
     }
 
     private static bool IsWithinAnyRange(int index, MatchCollection ranges)
@@ -125,16 +129,6 @@ internal sealed partial class LoopBodyMasker : ILoopBodyMasker
         }
 
         return false;
-    }
-
-    private static bool StartsWithIdentifier(string expression, string identifier)
-    {
-        if (!expression.StartsWith(identifier, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return expression.Length == identifier.Length || expression[identifier.Length] is '.' or ' ' or '|' or '\t';
     }
 
     [GeneratedRegex("\\{\\{((?:\"[^\"]*\"|[^{}\"])*)\\}\\}")]

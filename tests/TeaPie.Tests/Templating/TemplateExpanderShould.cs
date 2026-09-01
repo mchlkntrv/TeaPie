@@ -1072,7 +1072,9 @@ public class TemplateExpanderShould
     [Fact]
     public void EagerlyResolveALoopsSourceEvenWhenItIsGuardedByAFalseTopLevelIfCondition()
     {
-        // Known limitation (not fixed in this step, tracked for Step E2): the pre-scan's zero-item/
+        // Known limitation (not fixed by nested-loop support either - this is a top-level
+        // if/pre-scan-ordering problem, orthogonal to nesting depth. Tracked as a separate
+        // follow-up, not part of any currently-planned step): the pre-scan's zero-item/
         // MaxExpandedRequests/source-resolution guards run before any Fluid evaluation, so they don't
         // know a {% for %} sits inside a {% if %} whose condition will be false at render time. This
         // defeats the "skip a request if X" motivating use case (spec S3 OQ#1) for exactly the
@@ -1087,5 +1089,270 @@ public class TemplateExpanderShould
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*collection variable 'SeededPartners'*was not found*");
+    }
+
+    [Fact]
+    public void ExpandANestedLoopWhoseInnerSourceIsAMemberOfTheOuterLoopVariable()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[]
+        {
+            new { Name = "Acme", Licenses = new[] { "BASIC", "PRO" } },
+            new { Name = "Globex", Licenses = new[] { "BASIC" } }
+        });
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses %}" +
+            "[{{ company.Name }}:{{ license }}]" +
+            "{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("[Acme:BASIC][Acme:PRO][Globex:BASIC]");
+    }
+
+    [Fact]
+    public void NotThrowCollectionVariableNotFoundForAnInnerLoopSourceDerivedFromTheOuterLoopVariable()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[] { new { Licenses = new string[0] } });
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses %}{{ license }}{% endfor %}{% endfor %}";
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void RenderNothingForAnOuterItemWhoseNestedInnerCollectionIsEmptyWithoutThrowing()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[]
+        {
+            new { Name = "Empty", Licenses = new string[0] },
+            new { Name = "Acme", Licenses = new[] { "BASIC" } }
+        });
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses %}" +
+            "[{{ company.Name }}:{{ license }}]{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("[Acme:BASIC]");
+    }
+
+    private static string FormatRequest(string name)
+        => $"### {name}\nGET https://example.test/{name}\n\n";
+
+    [Fact]
+    public void RenderSuccessfullyWhenANestedLoopTreesCombinedRequestCountStaysWithinMaxExpandedRequests()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Outers", Enumerable.Range(1, 10)
+            .Select(_ => (object)new { Items = Enumerable.Range(1, 10).ToList() }).ToList());
+        const string content =
+            "{% for outer in Outers %}{% for item in outer.Items %}" +
+            "### r{{ forloop.index }}\nGET https://example.test/{{ item }}\n\n" +
+            "{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Split("###", StringSplitOptions.None).Length.Should().Be(101);
+        result.Should().NotContain("\u0000");
+    }
+
+    [Fact]
+    public void ThrowWhenANestedLoopTreesCombinedRequestCountExceedsMaxExpandedRequests()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Outers", Enumerable.Range(1, 50)
+            .Select(_ => (object)new { Items = Enumerable.Range(1, 30).ToList() }).ToList());
+        const string content =
+            "{% for outer in Outers %}{% for item in outer.Items %}" +
+            "### r{{ forloop.index }}\nGET https://example.test/{{ item }}\n\n" +
+            "{% endfor %}{% endfor %}";
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*1500*1000*Outers*");
+    }
+
+    [Fact]
+    public void AllowAStandaloneLoopSiblingToACappedNestedTreeToStillReachMaxExpandedRequestsIndependently()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Outers", Enumerable.Range(1, 10)
+            .Select(_ => (object)new { Items = Enumerable.Range(1, 10).ToList() }).ToList());
+        var content =
+            "{% for outer in Outers %}{% for item in outer.Items %}" +
+            FormatRequest("nested{{ forloop.index }}") +
+            "{% endfor %}{% endfor %}" +
+            "{% for i in (1..1000) %}" + FormatRequest("standalone{{ i }}") + "{% endfor %}";
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void RenderEmptyOutputWithoutThrowingWhenANestedLoopTreeIsInsideAFalseTopLevelIfCondition()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Flag", false);
+        variables.SetVariable("Outers", new object[] { new { Items = new[] { "x" } } });
+        const string content =
+            "{% if Flag %}{% for outer in Outers %}{% for item in outer.Items %}" +
+            "[{{ item }}]{% endfor %}{% endfor %}{% endif %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be(string.Empty);
+    }
+
+    [Fact]
+    public void ExposeTheOuterLoopIndexInsideANestedLoopBodyViaAssignWorkaround()
+    {
+        // forloop.parentloop does not exist in Fluid.Core (verified via reflection against both
+        // the pinned 2.31.0 and the newest published 2.40.0 at the time of checking). The
+        // documented workaround: capture the outer loop's index into a variable via
+        // {% assign %} before entering the inner loop — an outer-loop assign is visible inside
+        // the nested inner loop body (see LoopBodyMaskerShould's nested-scope tests, Task 3).
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Outers", new object[]
+        {
+            new { Items = new[] { "x", "y" } },
+            new { Items = new[] { "z" } }
+        });
+        const string content =
+            "{% for outer in Outers %}{% assign outerIndex = forloop.index %}" +
+            "{% for item in outer.Items %}" +
+            "[{{ outerIndex }}.{{ forloop.index }}:{{ item }}]" +
+            "{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("[1.1:x][1.2:y][2.1:z]");
+    }
+
+    [Fact]
+    public void SupportAnIfConditionInsideANestedInnerLoopBody()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Outers", new object[]
+        {
+            new { Items = new[] { "keep", "skip" } }
+        });
+        const string content =
+            "{% for outer in Outers %}{% for item in outer.Items %}" +
+            "{% if item == \"keep\" %}[{{ item }}]{% endif %}" +
+            "{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("[keep]");
+    }
+
+    [Fact]
+    public void RenderTheOuterLoopIndexInsideAnAtNameStyleTokenInANestedLoopViaAssignWorkaround()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Outers", new object[] { new { Items = new[] { "a", "b" } } });
+        const string content =
+            "{% for outer in Outers %}{% assign outerIndex = forloop.index %}" +
+            "{% for item in outer.Items %}" +
+            "@name Create{{ outerIndex }}_{{ forloop.index }}" +
+            "{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Contain("@name Create1_1").And.Contain("@name Create1_2");
+    }
+
+    [Fact]
+    public void NotPersistAnInLoopAssignInsideANestedInnerLoopToIVariables()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Outers", new object[] { new { Items = new[] { "a" } } });
+        const string content =
+            "{% for outer in Outers %}{% for item in outer.Items %}" +
+            "{% assign flag = true %}{{ flag }}" +
+            "{% endfor %}{% endfor %}";
+
+        CreateExpander(variables).Expand(content, "test.http");
+
+        variables.ContainsVariable("flag").Should().BeFalse();
+    }
+
+    [Fact]
+    public void RenderThreeLevelsOfNestedLoopsWithDynamicSourcesAtEveryLevel()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Regions", new object[]
+        {
+            new
+            {
+                Name = "EU",
+                Countries = new object[]
+                {
+                    new { Name = "SK", Cities = new[] { "Bratislava", "Kosice" } }
+                }
+            }
+        });
+        const string content =
+            "{% for region in Regions %}" +
+            "{% for country in region.Countries %}" +
+            "{% for city in country.Cities %}" +
+            "{% assign marker = true %}" +
+            "[{{ region.Name }}/{{ country.Name }}/{{ city }}]" +
+            "{% endfor %}" +
+            "{% endfor %}" +
+            "{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("[EU/SK/Bratislava][EU/SK/Kosice]");
+        variables.ContainsVariable("marker").Should().BeFalse();
+    }
+
+    [Fact]
+    public void ReassignAnOuterLoopScopedAssignFreshOnEveryOuterIteration()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Outers", new object[]
+        {
+            new { Name = "first", Items = new[] { "x" } },
+            new { Name = "second", Items = new[] { "y" } }
+        });
+        const string content =
+            "{% for outer in Outers %}{% assign label = outer.Name %}" +
+            "{% for item in outer.Items %}[{{ label }}:{{ item }}]{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("[first:x][second:y]");
+    }
+
+    [Fact]
+    public void PropagateAnErrorFromAnInnerIterationAsAFailureOfTheWholeNestedLoop()
+    {
+        // Reuses the exact mechanism the pre-existing (single-level)
+        // ThrowWhenLoopItemFieldIsUndefined test already proves: an undefined member access
+        // inside {{ }} interpolation routes through TemplateOptions.Undefined, which throws.
+        // This avoids relying on an unverified assumption about how Fluid's `for` tag treats a
+        // null/missing collection (stock Liquid/Fluid renders zero iterations for that case,
+        // silently, matching the "empty inner collection" test elsewhere in this plan — that is
+        // NOT an error and must not be confused with this test's actual undefined-field trigger).
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Outers", new object[]
+        {
+            new { Items = new object[] { new { Name = "ok" } } },
+            new { Items = new object[] { new { Name = "also-ok" } } }
+        });
+        const string content =
+            "{% for outer in Outers %}{% for item in outer.Items %}{{ item.TypoField }}{% endfor %}{% endfor %}";
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*TypoField*");
     }
 }

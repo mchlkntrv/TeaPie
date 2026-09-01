@@ -1,0 +1,13 @@
+{% for company in Companies %}
+{% assign companyIndex = forloop.index %}
+{% for license in company.Licenses %}
+### Create license {{ companyIndex }}.{{ forloop.index }}: {{ company.Name }} / {{ license }}
+# @name CreateLicense{{ companyIndex }}_{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/posts
+Content-Type: application/json
+
+{ "title": "{{ company.Name }} - {{ license }}", "userId": {{ companyIndex }} }
+
+{% endfor %}
+{% endfor %}
