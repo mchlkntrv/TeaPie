@@ -258,6 +258,60 @@ public class TemplateExpanderShould
     }
 
     [Fact]
+    public void LeaveANoArgumentFunctionTokenIntactAfterExpansionInsideALoop()
+    {
+        const string content = "{% for tenant in Tenants %}{{$guid}}-{{ tenant.Name }}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" }, new { Name = "Globex" } });
+        var expander = CreateExpander(variables);
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Be("{{$guid}}-Acme{{$guid}}-Globex");
+    }
+
+    [Fact]
+    public void LeaveAFunctionTokenWithAPlainArgumentIntactAfterExpansionInsideALoop()
+    {
+        const string content = "{% for tenant in Tenants %}{{$randomInt 1 100}}-{{ tenant.Name }}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" } });
+        var expander = CreateExpander(variables);
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Be("{{$randomInt 1 100}}-Acme");
+    }
+
+    [Fact]
+    public void LeaveAFunctionTokenWithANestedVariableArgumentIntactAfterExpansionInsteadOfThrowingAParseError()
+    {
+        const string content =
+            "{% for tenant in Tenants %}{{$add {{MyNumber}} 2}}-{{ tenant.Name }}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" }, new { Name = "Globex" } });
+        var expander = CreateExpander(variables);
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Be("{{$add {{MyNumber}} 2}}-Acme{{$add {{MyNumber}} 2}}-Globex");
+    }
+
+    [Fact]
+    public void LeaveSeveralFunctionTokensIntactAlongsideTheLoopVariableAcrossIterations()
+    {
+        const string content =
+            "{% for tenant in Tenants %}{{$guid}}:{{ tenant.Name }}:{{$add {{MyNumber}} 2}}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" }, new { Name = "Globex" } });
+        var expander = CreateExpander(variables);
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Be("{{$guid}}:Acme:{{$add {{MyNumber}} 2}}{{$guid}}:Globex:{{$add {{MyNumber}} 2}}");
+    }
+
+    [Fact]
     public void ThrowParseErrorForLiteralNestedBracesInsteadOfSilentlyCorrupting()
     {
         const string content =

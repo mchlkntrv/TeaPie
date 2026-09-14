@@ -332,4 +332,71 @@ public class LoopBodyMaskerShould
 
         result.Should().Be(content);
     }
+
+    [Fact]
+    public void MaskANoArgumentFunctionTokenInsideALoopBody()
+    {
+        const string content = "{% for tenant in Tenants %}{{$guid}}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be("{% for tenant in Tenants %}{% raw %}{{$guid}}{% endraw %}{% endfor %}");
+    }
+
+    [Fact]
+    public void MaskAFunctionTokenWithAPlainArgumentInsideALoopBody()
+    {
+        const string content = "{% for tenant in Tenants %}{{$randomInt 1 100}}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(
+            "{% for tenant in Tenants %}{% raw %}{{$randomInt 1 100}}{% endraw %}{% endfor %}");
+    }
+
+    [Fact]
+    public void MaskAFunctionTokenWithANestedVariableArgumentAsOneWholeTokenInsideALoopBody()
+    {
+        const string content = "{% for tenant in Tenants %}{{$add {{MyNumber}} 2}}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(
+            "{% for tenant in Tenants %}{% raw %}{{$add {{MyNumber}} 2}}{% endraw %}{% endfor %}");
+    }
+
+    [Fact]
+    public void MaskAFunctionTokenWithTwoNestedVariableArgumentsAsOneWholeTokenInsideALoopBody()
+    {
+        const string content = "{% for tenant in Tenants %}{{$add {{X}} {{Y}}}}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(
+            "{% for tenant in Tenants %}{% raw %}{{$add {{X}} {{Y}}}}{% endraw %}{% endfor %}");
+    }
+
+    [Fact]
+    public void MaskAFunctionTokenWithAMultipleNestedLevelArgumentAsOneWholeTokenInsideALoopBody()
+    {
+        const string content = "{% for tenant in Tenants %}{{$outer {{$inner {{X}} 1}} 2}}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(
+            "{% for tenant in Tenants %}{% raw %}{{$outer {{$inner {{X}} 1}} 2}}{% endraw %}{% endfor %}");
+    }
+
+    [Fact]
+    public void MaskSeveralFunctionTokensAndLeaveTheLoopVariableUnmaskedInTheSameLoopBody()
+    {
+        const string content =
+            "{% for tenant in Tenants %}{{$guid}}-{{ tenant.Name }}-{{$add {{MyNumber}} 2}}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(
+            "{% for tenant in Tenants %}{% raw %}{{$guid}}{% endraw %}-{{ tenant.Name }}-" +
+            "{% raw %}{{$add {{MyNumber}} 2}}{% endraw %}{% endfor %}");
+    }
 }

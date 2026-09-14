@@ -13,7 +13,7 @@ internal sealed partial class LoopBodyMasker : ILoopBodyMasker
         var assignOccurrences = FindAssignOccurrences(content, blocks, rawRanges);
         var edits = new List<TextEdit>();
 
-        foreach (Match match in TokenRegex().Matches(content))
+        foreach (Match match in FindTokenMatches(content))
         {
             if (IsWithinAnyRange(match.Index, rawRanges) || IsWithinAnyRange(match.Index, tagRanges))
             {
@@ -131,8 +131,36 @@ internal sealed partial class LoopBodyMasker : ILoopBodyMasker
         return false;
     }
 
+    // Function-call tokens (`{{$name ...}}`) may embed nested `{{ }}` tokens in their arguments
+    // (e.g. `{{$add {{MyNumber}} 2}}`, documented in functions.md), to arbitrary depth. TokenRegex
+    // alone cannot express balanced nesting, so function-call tokens are matched separately via
+    // FunctionTokenRegex (which tracks brace depth with a balancing group) and excluded from
+    // TokenRegex's plain, non-nesting match set to avoid matching their nested pieces twice. Every
+    // other `{{ }}` token keeps TokenRegex's original, non-nesting behavior unchanged.
+    private static IEnumerable<Match> FindTokenMatches(string content)
+    {
+        var functionTokenMatches = FunctionTokenRegex().Matches(content);
+
+        foreach (Match match in functionTokenMatches)
+        {
+            yield return match;
+        }
+
+        foreach (Match match in TokenRegex().Matches(content))
+        {
+            if (!IsWithinAnyRange(match.Index, functionTokenMatches))
+            {
+                yield return match;
+            }
+        }
+    }
+
     [GeneratedRegex("\\{\\{((?:\"[^\"]*\"|[^{}\"])*)\\}\\}")]
     private static partial Regex TokenRegex();
+
+    [GeneratedRegex(
+        "\\{\\{(\\$(?:\"[^\"]*\"|'[^']*'|\\{\\{(?<D>)|\\}\\}(?<-D>)|[^{}])*(?(D)(?!)))\\}\\}")]
+    private static partial Regex FunctionTokenRegex();
 
     [GeneratedRegex(@"\{%-?\s*raw\s*-?%\}.*?\{%-?\s*endraw\s*-?%\}", RegexOptions.Singleline)]
     private static partial Regex RawBlockRegex();
