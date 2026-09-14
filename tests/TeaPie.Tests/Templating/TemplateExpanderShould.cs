@@ -160,6 +160,17 @@ public class TemplateExpanderShould
     }
 
     [Fact]
+    public void ThrowTemplatingErrorInsteadOfOverflowExceptionWhenNumericRangeUpperBoundIsTooLarge()
+    {
+        const string content = "{% for i in (1..99999999999) %}[{{ i }}]{% endfor %}";
+        var expander = CreateExpander();
+
+        var act = () => expander.Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*99999999999*");
+    }
+
+    [Fact]
     public void AllowTwoIndependentLoopBlocksToEachReachMaxExpandedRequestsWithoutACumulativeLimit()
     {
         const string content =

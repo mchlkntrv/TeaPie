@@ -13,9 +13,16 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
         var rangeMatch = NumericRangeRegex().Match(sourceExpression);
         if (rangeMatch.Success)
         {
-            var lower = int.Parse(rangeMatch.Groups[1].Value);
-            var upper = int.Parse(rangeMatch.Groups[2].Value);
-            return new LoopSource(null, Math.Max(0, upper - lower + 1));
+            if (!int.TryParse(rangeMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lower) ||
+                !int.TryParse(rangeMatch.Groups[2].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var upper))
+            {
+                throw new InvalidOperationException(
+                    $"Templating error: numeric range '{sourceExpression}' has a bound that is too large to " +
+                    $"represent as a 32-bit integer (maximum {int.MaxValue}). Reduce the range so both bounds fit.");
+            }
+
+            var count = (long)upper - lower + 1;
+            return new LoopSource(null, (int)Math.Clamp(count, 0, int.MaxValue));
         }
 
         var trimmed = sourceExpression.Trim();

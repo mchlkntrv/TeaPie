@@ -198,4 +198,45 @@ public class CollectionSourceResolverShould
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*empty item*");
     }
+
+    [Fact]
+    public void ThrowTemplatingErrorInsteadOfOverflowExceptionWhenNumericRangeUpperBoundIsTooLarge()
+    {
+        var resolver = new CollectionSourceResolver(new global::TeaPie.Variables.Variables());
+
+        var act = () => resolver.Resolve("(1..99999999999)");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*99999999999*");
+    }
+
+    [Fact]
+    public void ThrowTemplatingErrorInsteadOfOverflowExceptionWhenNumericRangeLowerBoundIsTooLarge()
+    {
+        var resolver = new CollectionSourceResolver(new global::TeaPie.Variables.Variables());
+
+        var act = () => resolver.Resolve("(99999999999..99999999999)");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*99999999999*");
+    }
+
+    [Fact]
+    public void ResolveValidSmallNumericRangeWithoutThrowing()
+    {
+        var resolver = new CollectionSourceResolver(new global::TeaPie.Variables.Variables());
+
+        var source = resolver.Resolve("(1..5)");
+
+        source.ItemCount.Should().Be(5);
+        source.Collection.Should().BeNull();
+    }
+
+    [Fact]
+    public void NotWrapAroundToZeroItemsWhenBoundsFitButElementCountOverflowsInt32()
+    {
+        var resolver = new CollectionSourceResolver(new global::TeaPie.Variables.Variables());
+
+        var source = resolver.Resolve($"(0..{int.MaxValue})");
+
+        source.ItemCount.Should().Be(int.MaxValue);
+    }
 }
