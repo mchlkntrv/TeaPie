@@ -81,12 +81,13 @@ internal sealed partial class TemplateExpander(
 
         var topLevelNames = masker.FindTopLevelAssignTargetNames(content, blocks);
 
-        var transformed = TextEditApplier.Apply(content, edits);
+        var transformed = TextEditApplier.Apply(content, edits, out var positionMap);
 
         if (!Parser.TryParse(transformed, out var template, out var parseError))
         {
+            var originalError = FluidParseErrorMapper.RemapToOriginal(parseError, content, transformed, positionMap);
             throw new InvalidOperationException(
-                $"Templating error in '{filePath}': failed to parse template: {parseError}. If this file " +
+                $"Templating error in '{filePath}': failed to parse template: {originalError}. If this file " +
                 "contains literal '{{%' text that is not a TeaPie template tag, wrap it in " +
                 "'{{% raw %}}...{{% endraw %}}'.");
         }

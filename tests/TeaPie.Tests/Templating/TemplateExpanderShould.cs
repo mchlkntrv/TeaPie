@@ -1439,4 +1439,93 @@ public class TemplateExpanderShould
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*TypoField*");
     }
+
+    [Fact]
+    public void ReportPositionAndSourceFromTheOriginalFileForAFluidParseErrorOnTheFirstLine()
+    {
+        // "{{ NotInScope }}" does not belong to the loop's scope, so LoopBodyMasker wraps it in
+        // '{% raw %}...{% endraw %}' before Fluid ever sees it - that rewrite runs entirely before
+        // the erroring '{% badtag %}' tag on the same line, so it shifts where Fluid thinks
+        // '{% badtag %}' starts. The reported position/source must still point at the ORIGINAL text.
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" } });
+        const string content = "{% for tenant in Tenants %}{{ NotInScope }}{% badtag %}{% endfor %}";
+        var expected = FindOriginalPosition(content, "{% badtag %}");
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("test.http");
+        ExtractReportedPosition(exception.Message).Should().Be(expected);
+        exception.Message.Should().Contain("Source:\n" + content);
+        exception.Message.Should().NotContain("__teapie_loop_");
+    }
+
+    [Fact]
+    public void ReportTheCorrectLineFromTheOriginalFileForAFluidParseErrorAfterSeveralLines()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" } });
+        const string content =
+            "### Setup\n" +
+            "POST {{ApiGatewayBaseUrl}}/init\n\n" +
+            "{% for tenant in Tenants %}\n" +
+            "{{ NotInScope }}\n" +
+            "{% badtag %}\n" +
+            "{% endfor %}";
+        var expected = FindOriginalPosition(content, "{% badtag %}");
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("test.http");
+        ExtractReportedPosition(exception.Message).Should().Be(expected);
+        exception.Message.Should().Contain("Source:\n{% badtag %}");
+    }
+
+    [Fact]
+    public void ReportTheCorrectPositionAndSourceForAFluidParseErrorOnALineAffectedByLoopMasking()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { Name = "Acme" } });
+        const string content =
+            "### Setup\n" +
+            "POST {{ApiGatewayBaseUrl}}/init\n\n" +
+            "{% for tenant in Tenants %}\n" +
+            "{{ NotInScope }}{% badtag %}\n" +
+            "{% endfor %}";
+        var expected = FindOriginalPosition(content, "{% badtag %}");
+        const string originalLine = "{{ NotInScope }}{% badtag %}";
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("test.http");
+        ExtractReportedPosition(exception.Message).Should().Be(expected);
+        exception.Message.Should().Contain("Source:\n" + originalLine);
+        exception.Message.Should().NotContain("__teapie_loop_");
+    }
+
+    [Fact]
+    public void ReportTheOriginalFileNameAndPositionForAFluidParseErrorInsideANestingRootLoop()
+    {
+        // Nesting-root loops get invisible NUL-delimited tree markers spliced in around them
+        // (see TemplateExpander's TreeStartMarkerPrefix/TreeEndMarkerPrefix) so the expanded-request
+        // count can be tallied per nesting root. Those markers must never leak into a reported
+        // position or source snippet either.
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Outers", new List<object> { new { Items = new List<object> { new { Name = "x" } } } });
+        const string content =
+            "{% for outer in Outers %}{% for inner in outer.Items %}{{ inner.Name }}{% endfor %}" +
+            "{% badtag %}{% endfor %}";
+        var expected = FindOriginalPosition(content, "{% badtag %}");
+
+        var act = () => CreateExpander(variables).Expand(content, "requests/scenario.http");
+
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("requests/scenario.http");
+        ExtractReportedPosition(exception.Message).Should().Be(expected);
+        exception.Message.Should().Contain("Source:\n" + content);
+        exception.Message.Should().NotContain("__teapie_loop_");
+    }
 }
