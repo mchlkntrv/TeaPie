@@ -201,16 +201,18 @@ Templating fails loudly instead of silently producing zero or empty requests:
 
 | Situation | Result |
 | --- | --- |
-| Collection variable does not exist | Error naming the missing variable and the file |
-| Variable exists but is not a collection | Error stating the variable must be a collection |
-| Collection resolves to zero items (empty list, `()`, or a numeric range with no items) | Error — an accidentally empty collection is almost always a mistake |
+| Collection variable does not exist | Error naming the missing variable and the file* |
+| Variable exists but is not a collection | Error stating the variable must be a collection* |
+| Collection resolves to zero items (empty list, `()`, or a numeric range with no items) | Error — an accidentally empty collection is almost always a mistake* |
 | Loop would expand to more than **1000** requests | Error, to prevent runaway expansion |
 | Missing `{% endfor %}`, a stray `{% endfor %}` with no matching `{% for %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag |
-| Nested `{% for %}` loops | Error — not supported |
+| Nested `{% for %}` loops | Supported — see [Multiple Loops in One File](#multiple-loops-in-one-file); a nesting-root loop's combined request count (across all its nesting levels) is what counts against the 1000-request limit above |
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
 | Two or more requests share the same `# @name` after expansion | Warning (not an error) — see [Naming Requests Inside a Loop](#naming-requests-inside-a-loop) |
 
 All errors include the request file's path to make them actionable.
+
+\* These three guards apply to a loop's own source expression. For an **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` in the [nested-loop example](#multiple-loops-in-one-file) above) — a source TeaPie cannot pre-resolve before rendering — these guards are not enforced; Fluid's own `{% for %}` semantics apply instead, so a missing, non-collection, or empty per-iteration source silently produces zero requests for that outer item rather than raising an error.
 
 ## Inspecting the Expanded Content
 
