@@ -1,17 +1,27 @@
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using static TeaPie.Tests.Templating.TemplatingTestHelpers;
 
 namespace TeaPie.Tests.Templating;
 
-public class TemplatingEndToEndShould
+public partial class TemplatingEndToEndShould
 {
     [Fact]
     public void RoundTripEveryDemoRequestFileWithoutLoopTagsByteIdentically()
     {
+        // By design (see Step E1 / RenderSuccessfullyWhenBodyCoincidentallyContainsValidFluidSyntax
+        // in TemplateExpanderShould), ANY '{%' occurrence - not just a recognized '{% for %}' loop -
+        // now routes the whole file through Fluid parsing/rendering, so a file containing '{%' is not
+        // expected to round-trip byte-identically even when the tag isn't a loop. Skipping such files
+        // here is intentional, not a way to dodge coverage: the assertion below pins WHY each skipped
+        // file is exempt (it genuinely uses a supported Fluid tag), so this test can no longer be
+        // satisfied by a demo file that merely happens to contain a stray, unsupported '{%'. Coverage
+        // for literal/malformed/escaped '{%' text lives in the dedicated facts below instead.
         var demoRoot = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "demo");
         var files = Directory.GetFiles(demoRoot, "*.http", SearchOption.AllDirectories)
             .Concat(Directory.GetFiles(demoRoot, "*.tp", SearchOption.AllDirectories));
         var expander = CreateExpander();
+        var filesWithoutFluidTags = 0;
 
         foreach (var file in files)
         {
@@ -19,12 +29,108 @@ public class TemplatingEndToEndShould
 
             if (original.Contains("{%", StringComparison.Ordinal))
             {
+                SupportedFluidTagRegex().IsMatch(original).Should().BeTrue(
+                    $"file '{file}' contains '{{%' but is only exempted from the byte-identical " +
+                    "round-trip check when it uses a real, supported Fluid tag (for/if/unless/assign/" +
+                    "raw) - an unsupported or malformed '{{%' must not be silently skipped");
                 continue;
             }
 
+            filesWithoutFluidTags++;
             var expanded = expander.Expand(original, file);
             expanded.Should().Be(original, $"file '{file}' does not contain '{{%' and must be returned unchanged");
         }
+
+        // Guards against every demo file coincidentally containing '{%' and this test silently
+        // exercising nothing: at least one plain file must still take the byte-identical path above.
+        filesWithoutFluidTags.Should().BeGreaterThan(0);
+    }
+
+    [GeneratedRegex(@"\{%-?\s*(for|endfor|if|elsif|else|endif|unless|endunless|assign|raw|endraw)\b")]
+    private static partial Regex SupportedFluidTagRegex();
+
+    [Fact]
+    public void RoundTripTextWithPercentAndBraceThatAreNotAdjacentByteIdentically()
+    {
+        // '{%' detection is a literal, adjacent substring match. Text that merely contains a '%' and a
+        // '{' somewhere - but never as the exact two-character sequence '{%' - must never be routed
+        // into Fluid parsing at all, and so must round-trip completely unchanged.
+        const string content = "100% {not a template}";
+        var expander = CreateExpander();
+
+        var result = expander.Expand(content, "probe.http");
+
+        result.Should().Be(content);
+    }
+
+    [Fact]
+    public void ThrowAnActionableParseErrorForTopLevelTextThatCoincidentallyContainsAnUnsupportedFluidLikeTag()
+    {
+        // This is the behavior the round-trip test above now pins explicitly instead of hiding via a
+        // blanket skip: literal, adjacent '{%' text that is not real Fluid syntax and sits outside any
+        // '{% for %}' loop (i.e. at the top level, exercising the Step E1 whole-file parse directly)
+        // is not silently passed through - it fails to parse, and the failure names the file, points at
+        // the original line/column, quotes the offending original source line, and tells the user how
+        // to keep the text literal (wrap it in '{% raw %}...{% endraw %}').
+        const string content =
+            "### Health check\n" +
+            "GET {{ApiBaseUrl}}/health\n\n" +
+            "{% badtag %}\n";
+        var expectedLine = FindOriginalPosition(content, "{% badtag %}").Line;
+        var expander = CreateExpander();
+
+        var act = () => expander.Expand(content, "requests/health.http");
+
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("requests/health.http");
+        exception.Message.Should().Contain("raw");
+        ExtractReportedPosition(exception.Message).Line.Should().Be(expectedLine);
+        exception.Message.Should().Contain("Source:\n{% badtag %}");
+    }
+
+    [Fact]
+    public void RenderATopLevelStandaloneAssignTagWithNoLoopInvolvedAtAll()
+    {
+        // Pins the Step E1 generalization directly at the end-to-end level: a supported Fluid tag
+        // other than '{% for %}' (here, '{% assign %}') is recognized and rendered even when it is not
+        // part of any loop - "any '{%' triggers Fluid parsing" also means "any supported tag works",
+        // not only loop tags.
+        const string content = "{% assign greeting = \"Hello\" %}{{ greeting }}, world!";
+        var expander = CreateExpander();
+
+        var result = expander.Expand(content, "probe.http");
+
+        result.Should().Be("Hello, world!");
+    }
+
+    [Fact]
+    public void ExpandAMinimalStandaloneForEndforLoopWithoutAnyDemoFixture()
+    {
+        // A minimal, self-contained companion to the demo-fixture loop tests above/below: proves a
+        // genuinely valid '{% for %}' ... '{% endfor %}' loop still expands correctly, independent of
+        // any file on disk, so this file's coverage of the "valid loop" input category does not rely
+        // solely on external fixtures that could themselves change.
+        const string content = "{% for i in (1..2) %}Item {{ i }}\n{% endfor %}";
+        var expander = CreateExpander();
+
+        var result = expander.Expand(content, "probe.http");
+
+        result.Should().Be("Item 1\nItem 2\n");
+    }
+
+    [Fact]
+    public void PreserveLiteralPercentBraceTextWhenWrappedInARawBlock()
+    {
+        // The officially supported way to keep literal '{%'-looking text unexpanded: wrap it in
+        // Fluid's own '{% raw %}...{% endraw %}' tag (also documented in the parse-error message
+        // above). The raw wrapper tags themselves are consumed by Fluid, but the enclosed literal
+        // text - including its own '{%' sequence - survives completely unchanged.
+        const string content = "Template syntax looks like {% raw %}{% this %}{% endraw %}, escaped.";
+        var expander = CreateExpander();
+
+        var result = expander.Expand(content, "probe.http");
+
+        result.Should().Be("Template syntax looks like {% this %}, escaped.");
     }
 
     [Fact]
