@@ -1,8 +1,0 @@
-{% for partner in TypoPartners %}
-### Create partner {{ forloop.index }}
-POST {{ApiBaseUrl}}/posts
-Content-Type: application/json
-
-{ "name": "{{ partner.Name }}", "taxId": "{{ partner.TaxId }}" }
-
-{% endfor %}

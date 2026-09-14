@@ -64,8 +64,8 @@ public class TemplatingEndToEndShould
     public void RenderTheLoopOverPartnersFixtureIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "001-Loop-Over-Partners", "001-loop-over-partners-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "001-Loop-Over-Partners", "001-loop-over-partners-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Partners", new[]
@@ -101,8 +101,8 @@ public class TemplatingEndToEndShould
     public void RenderTheTwoLoopsOneFileFixtureIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "002-Two-Loops-One-File", "002-two-loops-one-file-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "002-Two-Loops-One-File", "002-two-loops-one-file-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Products", new[]
@@ -167,8 +167,8 @@ public class TemplatingEndToEndShould
     public void RenderTheNumericRangeNoVariableFixtureIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "003-Numeric-Range-No-Variable", "003-numeric-range-no-variable-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "003-Numeric-Range-No-Variable", "003-numeric-range-no-variable-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
 
@@ -226,8 +226,8 @@ public class TemplatingEndToEndShould
     public void RenderTheLoopFeedsLoopCreateCompaniesFixtureIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "005-Loop-Feeds-Loop", "001-Create-Companies", "001-create-companies-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "005-Loop-Feeds-Loop", "001-Create-Companies", "001-create-companies-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Companies", new[]
@@ -263,8 +263,8 @@ public class TemplatingEndToEndShould
     public void RenderTheLoopFeedsLoopCreateLicensesFixtureIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "005-Loop-Feeds-Loop", "002-Create-Licenses", "002-create-licenses-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "005-Loop-Feeds-Loop", "002-Create-Licenses", "002-create-licenses-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("CreatedCompanies", new[]
@@ -300,8 +300,8 @@ public class TemplatingEndToEndShould
     public void RenderTheTripleChainCreateCompaniesFixtureIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "006-Triple-Chain", "001-Create-Companies", "001-create-companies-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "006-Triple-Chain", "001-Create-Companies", "001-create-companies-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Companies", new[]
@@ -337,8 +337,8 @@ public class TemplatingEndToEndShould
     public void RenderTheTripleChainCreateLicensesFixtureIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "006-Triple-Chain", "002-Create-Licenses", "002-create-licenses-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "006-Triple-Chain", "002-Create-Licenses", "002-create-licenses-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("CreatedCompanies", new[]
@@ -374,8 +374,8 @@ public class TemplatingEndToEndShould
     public void RenderTheTripleChainCreateInvoicesFixtureIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "006-Triple-Chain", "003-Create-Invoices", "003-create-invoices-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "006-Triple-Chain", "003-Create-Invoices", "003-create-invoices-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("CreatedLicenses", new[]
@@ -411,8 +411,8 @@ public class TemplatingEndToEndShould
     public void RenderTheKitchenSinkMixedBatchFixtureIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "007-Kitchen-Sink", "001-Mixed-Batch", "001-mixed-batch-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "007-Kitchen-Sink", "001-Mixed-Batch", "001-mixed-batch-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Partners", new[]
@@ -483,8 +483,8 @@ public class TemplatingEndToEndShould
     public void RenderTheKitchenSinkFollowUpFixtureIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "007-Kitchen-Sink", "002-Follow-Up", "002-follow-up-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "007-Kitchen-Sink", "002-Follow-Up", "002-follow-up-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("CreatedPartners", new[]
@@ -530,8 +530,8 @@ public class TemplatingEndToEndShould
     public void RenderTheInlineLiteralFixtureIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "009-Inline-Literal", "009-inline-literal-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "009-Inline-Literal", "009-inline-literal-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
 
@@ -571,8 +571,8 @@ public class TemplatingEndToEndShould
     public void RenderTheDuplicateNameWarningFixtureIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "010-Duplicate-Name-Warning", "010-duplicate-name-warning-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "010-Duplicate-Name-Warning", "010-duplicate-name-warning-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Partners", new[]
@@ -608,8 +608,8 @@ public class TemplatingEndToEndShould
     public void RenderTheTpFileLoopFixtureHttpSectionIdenticallyToTodaysOutputAheadOfTheWholeFileRenderRefactor()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "008-Tp-File-Loop", "008-tp-file-loop.tp");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "008-Tp-File-Loop", "008-tp-file-loop.tp");
         var fullContent = File.ReadAllText(fixturePath);
         const string httpMarker = "--- HTTP";
         const string testMarker = "--- TEST";
@@ -660,8 +660,8 @@ public class TemplatingEndToEndShould
     public void RenderTheNestedLoopsFixtureWithCorrectOuterInnerIndexing()
     {
         var fixturePath = Path.Combine(
-            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "templating-demo", "Tests", "014-Nested-Loops", "014-nested-loops-req.http");
+            AppContext.BaseDirectory, "..", "..", "..",
+            "Templating", "Fixtures", "014-Nested-Loops", "014-nested-loops-req.http");
         var original = File.ReadAllText(fixturePath);
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Companies", new object[]

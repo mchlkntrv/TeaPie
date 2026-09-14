@@ -176,7 +176,24 @@ POST {{ApiBaseUrl}}/categories
 {% endfor %}
 ```
 
-**Nested loops are not supported** — a `{% for %}` inside another `{% for %}` fails with an error rather than being silently misinterpreted.
+A `{% for %}` can be nested inside another `{% for %}`. Use `{% assign %}` to capture the outer loop's `forloop.index` under a different name before the inner loop starts, since the inner loop's own `forloop` shadows the outer one:
+
+```http
+{% for company in Companies %}
+{% assign companyIndex = forloop.index %}
+{% for license in company.Licenses %}
+### Create license {{ companyIndex }}.{{ forloop.index }}: {{ company.Name }} / {{ license }}
+# @name CreateLicense{{ companyIndex }}_{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/companies/{{ company.Name }}/licenses
+Content-Type: application/json
+
+{ "type": "{{ license }}" }
+{% endfor %}
+{% endfor %}
+```
+
+All requests produced by a nesting-root loop (the outer loop and everything nested inside it) count together against the 1000-request expansion limit.
 
 ## Guards and Error Handling
 
@@ -233,8 +250,7 @@ All requests from the loop (and any plain requests in the same file) land in the
 
 This is a first iteration of templating support. The following are **not** supported yet:
 
-- `{% if %}`, `{% assign %}`, `{% unless %}`, or any other Liquid/Fluid tag besides `{% for %}` / `{% endfor %}`
-- Nested loops
+- Any Liquid/Fluid tag besides `{% for %}` / `{% endfor %}` / `{% if %}` / `{% elsif %}` / `{% else %}` / `{% unless %}` / `{% assign %}`
 - Templating inside `.csx` scripts (only `.http`/`.tp` request content is expanded)
 - External data files (CSV/JSON) as a collection source
 - Parallel execution of the requests produced by a loop

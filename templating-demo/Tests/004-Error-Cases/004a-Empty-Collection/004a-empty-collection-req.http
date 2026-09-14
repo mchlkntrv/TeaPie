@@ -1,8 +1,0 @@
-{% for partner in EmptyPartners %}
-### Create partner {{ forloop.index }}
-POST {{ApiBaseUrl}}/posts
-Content-Type: application/json
-
-{ "name": "{{ partner.Name }}" }
-
-{% endfor %}

@@ -6,7 +6,7 @@ for (var i = 1; i <= count; i++)
     var name = $"AddCarBatch{i}";
     var expectedBrand = brands[i - 1];
 
-    await tp.Test($"Car #{i} ({expectedBrand}) added by the loop should be created with status 201.", async () =>
+    await tp.Test($"Car #{i} added by the loop should be created with status 201.", async () =>
     {
         var statusCode = tp.Responses[name].StatusCode();
         Equal(201, statusCode);
