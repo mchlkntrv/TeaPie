@@ -69,7 +69,7 @@ internal sealed partial class LoopBlockScanner : ILoopBlockScanner
     private static bool IsWithinAnyBlock(int index, List<LoopBlock> blocks)
         => blocks.Exists(block => index >= block.StartIndex && index < block.StartIndex + block.Length);
 
-    [GeneratedRegex(@"\{%(-)?\s*for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+(.+?)\s*(-)?%\}")]
+    [GeneratedRegex(@"\{%(-)?\s*for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+((?:""[^""]*""|'[^']*'|[^""'\n])+?)\s*(-)?%\}")]
     private static partial Regex ForTagRegex();
 
     [GeneratedRegex(@"\{%(-)?\s*endfor\s*(-)?%\}")]

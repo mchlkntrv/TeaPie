@@ -112,6 +112,19 @@ public class LoopBlockScannerShould
     }
 
     [Fact]
+    public void CaptureTheFullSourceExpressionWhenAQuotedStringWithinItContainsALiteralPercentBrace()
+    {
+        const string content = "{% for x in (\"a%}b\", \"c\") %}BODY{% endfor %}";
+        var scanner = new LoopBlockScanner();
+
+        var blocks = scanner.FindLoopBlocks(content);
+
+        blocks.Should().HaveCount(1);
+        blocks[0].SourceExpression.Should().Be("(\"a%}b\", \"c\")");
+        blocks[0].Body.Should().Be("BODY");
+    }
+
+    [Fact]
     public void FindWellFormedWhitespaceControlLoopBlock()
     {
         const string content = "{%- for car in Cars -%}BODY{%- endfor -%}";
