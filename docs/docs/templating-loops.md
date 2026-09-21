@@ -96,7 +96,7 @@ Content-Type: application/json
 
 Inside a loop body, `{{ forloop.index }}` gives the current **1-based** iteration number. It is commonly used to build unique request names (`# @name CreateItem{{ forloop.index }}`) and unique values inside the request body.
 
-The full `forloop` object also exposes:
+The fields you'll use most often:
 
 | Field | Meaning |
 | --- | --- |
@@ -105,7 +105,7 @@ The full `forloop` object also exposes:
 | `forloop.first` | `true` on the first iteration, `false` otherwise |
 | `forloop.last` | `true` on the last iteration, `false` otherwise |
 
-All four are usable anywhere inside the loop body, including inside `# @name` declarations.
+All four are usable anywhere inside the loop body, including inside `# @name` declarations. `forloop` is Fluid's native loop object, so its other standard fields (`forloop.length`, `forloop.rindex`, `forloop.rindex0`) are also available, even though TeaPie doesn't add anything on top of them.
 Expansion happens **before** request names are parsed, so `# @name Create{{ forloop.index }}`
 becomes a literal name like `# @name Create1` before TeaPie's own request parser ever sees it —
 the parser and everything downstream of it (including `tp.Responses[...]` lookups and the test
