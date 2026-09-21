@@ -13,16 +13,7 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
         var rangeMatch = NumericRangeRegex().Match(sourceExpression);
         if (rangeMatch.Success)
         {
-            if (!int.TryParse(rangeMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lower) ||
-                !int.TryParse(rangeMatch.Groups[2].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var upper))
-            {
-                throw new InvalidOperationException(
-                    $"Templating error: numeric range '{sourceExpression}' has a bound that is too large to " +
-                    $"represent as a 32-bit integer (maximum {int.MaxValue}). Reduce the range so both bounds fit.");
-            }
-
-            var count = (long)upper - lower + 1;
-            return new LoopSource(null, (int)Math.Clamp(count, 0, int.MaxValue));
+            return ResolveNumericRange(sourceExpression, rangeMatch);
         }
 
         var trimmed = sourceExpression.Trim();
@@ -37,6 +28,25 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
                 $"Templating error: inline collection '{trimmed}' has unbalanced parentheses.");
         }
 
+        return ResolveNamedVariable(sourceExpression);
+    }
+
+    private static LoopSource ResolveNumericRange(string sourceExpression, Match rangeMatch)
+    {
+        if (!int.TryParse(rangeMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lower) ||
+            !int.TryParse(rangeMatch.Groups[2].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var upper))
+        {
+            throw new InvalidOperationException(
+                $"Templating error: numeric range '{sourceExpression}' has a bound that is too large to " +
+                $"represent as a 32-bit integer (maximum {int.MaxValue}). Reduce the range so both bounds fit.");
+        }
+
+        var count = (long)upper - lower + 1;
+        return new LoopSource(null, (int)Math.Clamp(count, 0, int.MaxValue));
+    }
+
+    private LoopSource ResolveNamedVariable(string sourceExpression)
+    {
         if (!variables.ContainsVariable(sourceExpression))
         {
             throw new InvalidOperationException(
