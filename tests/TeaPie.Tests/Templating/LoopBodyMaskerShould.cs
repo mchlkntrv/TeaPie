@@ -399,4 +399,16 @@ public class LoopBodyMaskerShould
             "{% for tenant in Tenants %}{% raw %}{{$guid}}{% endraw %}-{{ tenant.Name }}-" +
             "{% raw %}{{$add {{MyNumber}} 2}}{% endraw %}{% endfor %}");
     }
+
+    [Fact]
+    public void MaskTwoAdjacentFunctionTokensWithNestedArgumentsAndNoSeparatorBetweenThem()
+    {
+        const string content = "{% for tenant in Tenants %}{{$add {{X}} 1}}{{$add {{Y}} 1}}{% endfor %}";
+
+        var result = ApplyMask(content);
+
+        result.Should().Be(
+            "{% for tenant in Tenants %}{% raw %}{{$add {{X}} 1}}{% endraw %}" +
+            "{% raw %}{{$add {{Y}} 1}}{% endraw %}{% endfor %}");
+    }
 }

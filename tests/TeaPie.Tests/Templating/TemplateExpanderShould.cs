@@ -336,6 +336,19 @@ public class TemplateExpanderShould
     }
 
     [Fact]
+    public void LeaveTwoAdjacentFunctionTokensWithNestedArgumentsIntactWithNoSeparatorBetweenThem()
+    {
+        const string content = "{% for tenant in Tenants %}{{$add {{X}} 1}}{{$add {{Y}} 1}}{% endfor %}";
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Tenants", new List<object> { new { } });
+        var expander = CreateExpander(variables);
+
+        var result = expander.Expand(content, "test.http");
+
+        result.Should().Be("{{$add {{X}} 1}}{{$add {{Y}} 1}}");
+    }
+
+    [Fact]
     public void ThrowParseErrorForLiteralNestedBracesInsteadOfSilentlyCorrupting()
     {
         const string content =
