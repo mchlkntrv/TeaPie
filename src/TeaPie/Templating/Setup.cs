@@ -10,6 +10,7 @@ internal static class Setup
         services.AddSingleton<ILoopBodyMasker, LoopBodyMasker>();
         services.AddSingleton<ICollectionSourceResolver, CollectionSourceResolver>();
         services.AddSingleton<IVariablesFluidModelBuilder, VariablesFluidModelBuilder>();
+        services.AddSingleton(new TemplatingLimits());
         services.AddSingleton<ITemplateExpander, TemplateExpander>();
 
         return services;

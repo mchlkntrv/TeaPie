@@ -243,7 +243,8 @@ public class TemplateExpanderShould
         var resolver = Substitute.For<ICollectionSourceResolver>();
         resolver.Resolve("Weird").Returns(new LoopSource(new List<object>(), 3));
         var expander = new TemplateExpander(
-            new LoopBlockScanner(), new LoopBodyMasker(), resolver, new VariablesFluidModelBuilder(), new global::TeaPie.Variables.Variables());
+            new LoopBlockScanner(), new LoopBodyMasker(), resolver, new VariablesFluidModelBuilder(),
+            new global::TeaPie.Variables.Variables(), new TemplatingLimits());
 
         var result = expander.Expand(content, "test.http");
 

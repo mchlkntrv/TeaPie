@@ -6,7 +6,8 @@ namespace TeaPie.Tests.Templating;
 
 internal static partial class TemplatingTestHelpers
 {
-    public static TemplateExpander CreateExpander(global::TeaPie.Variables.IVariables? variables = null)
+    public static TemplateExpander CreateExpander(
+        global::TeaPie.Variables.IVariables? variables = null, TemplatingLimits? limits = null)
     {
         var vars = variables ?? new global::TeaPie.Variables.Variables();
         return new TemplateExpander(
@@ -14,7 +15,8 @@ internal static partial class TemplatingTestHelpers
             new LoopBodyMasker(),
             new CollectionSourceResolver(vars),
             new VariablesFluidModelBuilder(),
-            vars);
+            vars,
+            limits ?? new TemplatingLimits());
     }
 
     public static (int Line, int Column) ExtractReportedPosition(string message)

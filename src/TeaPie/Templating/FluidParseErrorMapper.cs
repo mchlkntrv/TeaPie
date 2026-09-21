@@ -100,6 +100,6 @@ internal static partial class FluidParseErrorMapper
         return line.TrimEnd('\r');
     }
 
-    [GeneratedRegex(@"^(?<message>.*) at \((?<line>\d+):(?<column>\d+)\)", RegexOptions.Singleline)]
+    [GeneratedRegex(FluidMessageFormats.ParseErrorPositionPattern, RegexOptions.Singleline)]
     private static partial Regex PositionRegex();
 }

@@ -13,11 +13,9 @@ internal sealed partial class TemplateExpander(
     ILoopBodyMasker masker,
     ICollectionSourceResolver sourceResolver,
     IVariablesFluidModelBuilder modelBuilder,
-    IVariables variables) : ITemplateExpander
+    IVariables variables,
+    TemplatingLimits limits) : ITemplateExpander
 {
-    private const int MaxExpandedRequests = 1000;
-    private const int MaxRenderSteps = 200000;
-
     private const string SourceAliasPrefix = "__teapie_loop_source_";
     private const string TreeStartMarkerPrefix = "\u0000__teapie_loop_tree_start_";
     private const string TreeEndMarkerPrefix = "\u0000__teapie_loop_tree_end_";
@@ -33,8 +31,35 @@ internal sealed partial class TemplateExpander(
         }
 
         var blocks = FindLoopBlocks(scanner, content, filePath);
-        var sources = new LoopSource?[blocks.Count];
         var edits = new List<TextEdit>();
+        var sources = ResolveSourcesAndCollectAliasEdits(blocks, filePath, edits);
+
+        ValidateDynamicSources(blocks, sources, filePath);
+
+        var nestingRootIndices = FindNestingRootIndices(blocks);
+        AddNestingTreeMarkerEdits(edits, blocks, nestingRootIndices);
+
+        edits.AddRange(masker.FindMaskEdits(content, blocks));
+        var topLevelNames = masker.FindTopLevelAssignTargetNames(content, blocks);
+
+        var transformed = TextEditApplier.Apply(content, edits, out var positionMap);
+        var template = ParseTemplate(transformed, content, positionMap, filePath);
+
+        var (context, topLevelAssignments) = BuildRenderContext(blocks, sources, topLevelNames, filePath);
+        var rendered = RenderTemplate(template, context, filePath);
+
+        ValidateNestedTreeRequestCounts(rendered, blocks, nestingRootIndices, filePath);
+        rendered = StripNestingTreeMarkers(rendered, nestingRootIndices);
+
+        PropagateTopLevelAssignments(topLevelAssignments);
+
+        return rendered;
+    }
+
+    private LoopSource?[] ResolveSourcesAndCollectAliasEdits(
+        IReadOnlyList<LoopBlock> blocks, string filePath, List<TextEdit> edits)
+    {
+        var sources = new LoopSource?[blocks.Count];
 
         for (var i = 0; i < blocks.Count; i++)
         {
@@ -61,11 +86,11 @@ internal sealed partial class TemplateExpander(
                     $"Templating error in '{filePath}': loop over '{effectiveExpression}' produced zero items.");
             }
 
-            if (LoopBlockHierarchy.IsStandaloneBlock(i, blocks) && source.ItemCount > MaxExpandedRequests)
+            if (LoopBlockHierarchy.IsStandaloneBlock(i, blocks) && source.ItemCount > limits.MaxExpandedRequests)
             {
                 throw new InvalidOperationException(
                     $"Templating error in '{filePath}': loop over '{block.SourceExpression}' would expand to " +
-                    $"{source.ItemCount} requests, exceeding the maximum of {MaxExpandedRequests}.");
+                    $"{source.ItemCount} requests, exceeding the maximum of {limits.MaxExpandedRequests}.");
             }
 
             if (source.Collection is not null)
@@ -75,38 +100,46 @@ internal sealed partial class TemplateExpander(
             }
         }
 
-        ValidateDynamicSources(blocks, sources, filePath);
+        return sources;
+    }
 
-        var nestingRootIndices = Enumerable.Range(0, blocks.Count)
-            .Where(i => LoopBlockHierarchy.IsNestingRoot(i, blocks))
-            .ToList();
+    private static List<int> FindNestingRootIndices(IReadOnlyList<LoopBlock> blocks)
+        => Enumerable.Range(0, blocks.Count).Where(i => LoopBlockHierarchy.IsNestingRoot(i, blocks)).ToList();
 
+    private static void AddNestingTreeMarkerEdits(
+        List<TextEdit> edits, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<int> nestingRootIndices)
+    {
         foreach (var rootIndex in nestingRootIndices)
         {
             var block = blocks[rootIndex];
             edits.Add(new TextEdit(block.StartIndex, 0, $"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}"));
             edits.Add(new TextEdit(block.StartIndex + block.Length, 0, $"{TreeEndMarkerPrefix}{rootIndex}{MarkerSuffix}"));
         }
+    }
 
-        edits.AddRange(masker.FindMaskEdits(content, blocks));
-
-        var topLevelNames = masker.FindTopLevelAssignTargetNames(content, blocks);
-
-        var transformed = TextEditApplier.Apply(content, edits, out var positionMap);
-
+    private static IFluidTemplate ParseTemplate(
+        string transformed, string originalContent, IReadOnlyList<TransformedTextSpan> positionMap, string filePath)
+    {
         if (!Parser.TryParse(transformed, out var template, out var parseError))
         {
-            var originalError = FluidParseErrorMapper.RemapToOriginal(parseError, content, transformed, positionMap);
+            var originalError =
+                FluidParseErrorMapper.RemapToOriginal(parseError, originalContent, transformed, positionMap);
             throw new InvalidOperationException(
                 $"Templating error in '{filePath}': failed to parse template: {originalError}. If this file " +
                 "contains literal '{{%' text that is not a TeaPie template tag, wrap it in " +
                 "'{{% raw %}}...{{% endraw %}}'.");
         }
 
+        return template;
+    }
+
+    private (TemplateContext Context, Dictionary<string, FluidValue> TopLevelAssignments) BuildRenderContext(
+        IReadOnlyList<LoopBlock> blocks, LoopSource?[] sources, IReadOnlySet<string> topLevelNames, string filePath)
+    {
         var options = new TemplateOptions
         {
             MemberAccessStrategy = new UnsafeMemberAccessStrategy(),
-            MaxSteps = MaxRenderSteps
+            MaxSteps = limits.MaxRenderSteps
         };
         options.Undefined = name => throw new InvalidOperationException(
             $"Templating error in '{filePath}': '{name}' is undefined.");
@@ -133,20 +166,28 @@ internal sealed partial class TemplateExpander(
             return new ValueTask<FluidValue>(value);
         };
 
-        string rendered;
+        return (context, topLevelAssignments);
+    }
+
+    private string RenderTemplate(IFluidTemplate template, TemplateContext context, string filePath)
+    {
         try
         {
-            rendered = template!.Render(context);
+            return template.Render(context);
         }
         catch (InvalidOperationException ex) when (IsRenderStepLimitExceeded(ex))
         {
             throw new InvalidOperationException(
-                $"Templating error in '{filePath}': template exceeded the maximum of {MaxRenderSteps} " +
+                $"Templating error in '{filePath}': template exceeded the maximum of {limits.MaxRenderSteps} " +
                 "rendering steps across the whole file - likely too many '{{ }}' " +
                 "expressions per item rather than a large collection (collection size is capped separately " +
                 "per loop). Check the file for repeated expressions, or split it into smaller loops.", ex);
         }
+    }
 
+    private void ValidateNestedTreeRequestCounts(
+        string rendered, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<int> nestingRootIndices, string filePath)
+    {
         foreach (var rootIndex in nestingRootIndices)
         {
             var startMarker = $"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}";
@@ -164,15 +205,18 @@ internal sealed partial class TemplateExpander(
             var requestCount = RequestSeparatorRegex().Split(segment)
                 .Count(fragment => RequestMethodAndUriLineRegex().IsMatch(fragment));
 
-            if (requestCount > MaxExpandedRequests)
+            if (requestCount > limits.MaxExpandedRequests)
             {
                 throw new InvalidOperationException(
                     $"Templating error in '{filePath}': the nested loop tree would expand to {requestCount} " +
-                    $"requests combined across all nesting levels, exceeding the maximum of {MaxExpandedRequests} " +
-                    $"(root loop over '{blocks[rootIndex].SourceExpression}').");
+                    "requests combined across all nesting levels, exceeding the maximum of " +
+                    $"{limits.MaxExpandedRequests} (root loop over '{blocks[rootIndex].SourceExpression}').");
             }
         }
+    }
 
+    private static string StripNestingTreeMarkers(string rendered, IReadOnlyList<int> nestingRootIndices)
+    {
         foreach (var rootIndex in nestingRootIndices)
         {
             rendered = rendered
@@ -180,12 +224,15 @@ internal sealed partial class TemplateExpander(
                 .Replace($"{TreeEndMarkerPrefix}{rootIndex}{MarkerSuffix}", string.Empty, StringComparison.Ordinal);
         }
 
+        return rendered;
+    }
+
+    private void PropagateTopLevelAssignments(Dictionary<string, FluidValue> topLevelAssignments)
+    {
         foreach (var (name, value) in topLevelAssignments)
         {
             variables.SetVariable(name, value.ToObjectValue());
         }
-
-        return rendered;
     }
 
     private static IReadOnlyList<LoopBlock> FindLoopBlocks(ILoopBlockScanner scanner, string content, string filePath)
@@ -329,7 +376,7 @@ internal sealed partial class TemplateExpander(
     }
 
     private static bool IsRenderStepLimitExceeded(InvalidOperationException ex)
-        => ex.Message.Contains("recursion", StringComparison.OrdinalIgnoreCase);
+        => ex.Message.Contains(FluidMessageFormats.RenderStepLimitMarker, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsDynamicSource(int blockIndex, IReadOnlyList<LoopBlock> blocks)
     {
