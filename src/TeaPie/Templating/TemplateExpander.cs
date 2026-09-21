@@ -136,13 +136,8 @@ internal sealed partial class TemplateExpander(
     private (TemplateContext Context, Dictionary<string, FluidValue> TopLevelAssignments) BuildRenderContext(
         IReadOnlyList<LoopBlock> blocks, LoopSource?[] sources, IReadOnlySet<string> topLevelNames, string filePath)
     {
-        var options = new TemplateOptions
-        {
-            MemberAccessStrategy = new UnsafeMemberAccessStrategy(),
-            MaxSteps = limits.MaxRenderSteps
-        };
-        options.Undefined = name => throw new InvalidOperationException(
-            $"Templating error in '{filePath}': '{name}' is undefined.");
+        var options = CreateMemberAccessOptions(filePath);
+        options.MaxSteps = limits.MaxRenderSteps;
 
         var model = new Dictionary<string, object?>(modelBuilder.Build(variables));
         for (var i = 0; i < blocks.Count; i++)
@@ -321,7 +316,7 @@ internal sealed partial class TemplateExpander(
                 $"{parseError}.");
         }
 
-        var options = new TemplateOptions { MemberAccessStrategy = new UnsafeMemberAccessStrategy() };
+        var options = CreateMemberAccessOptions(filePath);
         var context = new TemplateContext(new Dictionary<string, object?>(boundAncestors), options);
         var value = expression.EvaluateAsync(context).GetAwaiter().GetResult();
         var raw = value.ToObjectValue();
@@ -344,6 +339,14 @@ internal sealed partial class TemplateExpander(
 
         return materialized;
     }
+
+    private static TemplateOptions CreateMemberAccessOptions(string filePath)
+        => new()
+        {
+            MemberAccessStrategy = new UnsafeMemberAccessStrategy(),
+            Undefined = name => throw new InvalidOperationException(
+                $"Templating error in '{filePath}': '{name}' is undefined.")
+        };
 
     private static (string Expression, bool IsRequired) SplitRequiredModifier(string sourceExpression)
     {
