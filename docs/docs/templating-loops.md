@@ -231,7 +231,7 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | --- | --- |
 | Collection variable does not exist | Error naming the missing variable and the file* |
 | Variable exists but is not a collection | Error stating the variable must be a collection* |
-| Collection resolves to zero items (empty list, `()`, or a numeric range with no items) | Error — an accidentally empty collection is almost always a mistake* |
+| Collection resolves to zero items (empty list, `()`, or a numeric range with no items) | Error — an accidentally empty collection is almost always a mistake* (for an **inner** loop, only when its source is marked `\| required` — see [below](#marking-an-inner-loop-source-as-required)) |
 | Loop would expand to more than **1000** requests | Error, to prevent runaway expansion |
 | A numeric range bound (e.g. `(1..99999999999)`) is too large to fit a 32-bit integer | Error naming the offending bound, instead of a raw overflow failure* |
 | Missing `{% endfor %}`, a stray `{% endfor %}` with no matching `{% for %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag |
@@ -242,7 +242,27 @@ Templating fails loudly instead of silently producing zero or empty requests:
 
 All errors include the request file's path to make them actionable.
 
-\* These guards apply to a loop's own source expression. For an **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` in the [nested-loop example](#multiple-loops-in-one-file) above) — a source TeaPie cannot pre-resolve before rendering — these guards are not enforced; Fluid's own `{% for %}` semantics apply instead, so a missing, non-collection, empty, or oversized per-iteration source silently produces zero requests (or is left to Fluid/.NET's own behavior) for that outer item rather than raising an error.
+\* These guards apply to a loop's own source expression. A **top-level** source is resolved once, before rendering. An **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` in the [nested-loop example](#multiple-loops-in-one-file) above) is instead resolved once per outer iteration, right before that iteration renders — a missing property or a value that isn't a collection is still an error, unconditionally, the same as for a top-level source (naming the offending outer item too). The one exception is an **empty** per-iteration collection: since a genuinely empty child collection (e.g. a company with no customers) is often valid rather than a mistake, it silently produces zero requests for that outer item unless the loop's source is explicitly marked `| required` — see [Marking an Inner Loop Source as Required](#marking-an-inner-loop-source-as-required). The 1000-request and malformed-tag guards are unaffected by any of this.
+
+### Marking an Inner Loop Source as Required
+
+An inner loop's source is allowed to resolve to an empty collection for some outer items without raising an error — a company with no customers is often a perfectly valid case, not a mistake. Add a `| required` modifier to the source expression when an empty result *should* be treated as an error for that specific loop:
+
+```http
+{% for company in Companies %}
+{% for license in company.Licenses | required %}
+### Activate license {{ forloop.index }}: {{ company.Name }} / {{ license }}
+POST {{ApiBaseUrl}}/companies/{{ company.Name }}/licenses/activate
+Content-Type: application/json
+
+{ "type": "{{ license }}" }
+{% endfor %}
+{% endfor %}
+```
+
+If any company in `Companies` has an empty (or missing/`null`) `Licenses` collection, this raises the same "produced zero items" error a top-level empty loop would. `| required` only changes the empty-collection check — a missing property or a non-collection value on an inner loop's source is already an error with or without it.
+
+`| required` is accepted on a top-level loop's source too, but has no effect there — an empty top-level collection is already an unconditional error.
 
 ## Inspecting the Expanded Content
 

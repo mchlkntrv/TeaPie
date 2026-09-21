@@ -84,7 +84,17 @@ Templating fails loudly instead of silently producing zero or empty requests:
 
 All of the above errors include the request file's path.
 
-\* For an **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` above), TeaPie cannot pre-resolve it, so these guards aren't enforced — a missing/empty/oversized per-iteration source there silently produces zero requests for that outer item instead of erroring.
+\* For an **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` above), TeaPie evaluates that source once per outer iteration instead of once up front. Missing/non-collection is still an unconditional error there (naming which outer item, e.g. `company[1]`), same as a top-level source — but an **empty** per-iteration collection is silent by default (a company with no customers is often valid, not a mistake). Mark the loop `| required` to make an empty per-iteration collection an error too:
+
+```http
+{% for company in Companies %}
+{% for license in company.Licenses | required %}
+...
+{% endfor %}
+{% endfor %}
+```
+
+`| required` only affects the empty-collection check; it's a no-op on a top-level source (already unconditional there).
 
 ## Current Limitations
 

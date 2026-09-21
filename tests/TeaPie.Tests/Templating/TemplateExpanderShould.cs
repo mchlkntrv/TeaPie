@@ -1172,6 +1172,96 @@ public class TemplateExpanderShould
         result.Should().Be("[Acme:BASIC]");
     }
 
+    [Fact]
+    public void ThrowWhenAnInnerDynamicLoopSourceIsNotACollection()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[] { new { Name = "Acme", Licenses = "BASIC" } });
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses %}" +
+            "[{{ company.Name }}:{{ license }}]{% endfor %}{% endfor %}";
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*variable 'company.Licenses'*must be a collection*");
+    }
+
+    [Fact]
+    public void ThrowWhenAnInnerDynamicLoopSourceIsNotACollectionForALaterOuterItem()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[]
+        {
+            new { Name = "Acme", Licenses = new[] { "BASIC" } },
+            new { Name = "Globex", Licenses = "NOT-A-LIST" }
+        });
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses %}" +
+            "[{{ company.Name }}:{{ license }}]{% endfor %}{% endfor %}";
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*variable 'company.Licenses'*must be a collection*company[1]*");
+    }
+
+    [Fact]
+    public void ThrowWhenAnInnerDynamicLoopSourcePropertyIsNullEvenWithoutRequired()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[] { new { Name = "Acme", Licenses = (string[]?)null } });
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses %}" +
+            "[{{ company.Name }}:{{ license }}]{% endfor %}{% endfor %}";
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*variable 'company.Licenses'*must be a collection*");
+    }
+
+    [Fact]
+    public void ThrowWhenAnInnerDynamicLoopSourceMarkedRequiredIsEmpty()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[] { new { Name = "Acme", Licenses = new string[0] } });
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses | required %}" +
+            "[{{ company.Name }}:{{ license }}]{% endfor %}{% endfor %}";
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*loop over 'company.Licenses'*produced zero items*");
+    }
+
+    [Fact]
+    public void RenderNormallyWhenAnInnerDynamicLoopSourceMarkedRequiredIsNonEmpty()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[] { new { Name = "Acme", Licenses = new[] { "BASIC" } } });
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses | required %}" +
+            "[{{ company.Name }}:{{ license }}]{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("[Acme:BASIC]");
+    }
+
+    [Fact]
+    public void NotThrowWhenATopLevelLoopSourceHasARedundantRequiredModifier()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[] { new { Name = "Acme" } });
+        const string content = "{% for company in Companies | required %}{{ company.Name }}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("Acme");
+    }
+
     private static string FormatRequest(string name)
         => $"### {name}\nGET https://example.test/{name}\n\n";
 
