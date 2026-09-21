@@ -14,7 +14,7 @@ Loop expansion runs **after** the pre-request (`-init.csx`) script and **before*
 
 - Any variable set in `-init.csx` via `tp.SetVariable(...)` is already available as a loop source.
 - Each resulting request behaves exactly like a normal request: it gets its own name, directives (`## TEST-...`, `## AUTH-PROVIDER`, retry directives), and its own entry in the test report.
-- Files that don't contain a `{% for %}` tag are left completely unchanged — templating has zero effect on ordinary request files.
+- Files that don't contain any Fluid tag (`{%` anywhere in the content) are left completely unchanged — templating has zero effect on ordinary request files. This fast path is keyed on `{%` in general, not on `{% for %}` specifically: a file using only `{% if %}`/`{% assign %}` with no loop at all is still parsed and rendered by Fluid (see [Conditions and Assignments](#conditions-and-assignments)).
 
 ## Collection Sources
 
@@ -195,6 +195,34 @@ Content-Type: application/json
 
 All requests produced by a nesting-root loop (the outer loop and everything nested inside it) count together against the 1000-request expansion limit.
 
+## Conditions and Assignments
+
+Inside a loop body — or anywhere at the top level of the file, even with no loop involved — you can also use `{% if %}` / `{% elsif %}` / `{% else %}` / `{% unless %}` and `{% assign %}`. These are plain Fluid tags with their usual semantics; TeaPie adds no special behavior beyond making its own variables (see [How Expansion Works](#how-expansion-works-and-what-it-leaves-alone)) and `forloop` available to the conditions.
+
+```http
+{% for partner in Partners %}
+{% if partner.IsPreferred %}
+### Create preferred partner {{ forloop.index }}: {{ partner.Name }}
+POST {{ApiBaseUrl}}/partners/preferred
+{% elsif forloop.last %}
+### Create last partner {{ forloop.index }}: {{ partner.Name }}
+POST {{ApiBaseUrl}}/partners
+{% else %}
+### Create partner {{ forloop.index }}: {{ partner.Name }}
+POST {{ApiBaseUrl}}/partners
+{% endif %}
+Content-Type: application/json
+
+{ "name": "{{ partner.Name }}" }
+{% endfor %}
+```
+
+A few things worth knowing:
+
+- A condition on an **undefined** name (a typo, or a TeaPie variable that was never set) is falsy rather than an error — this is standard Fluid behavior, not a TeaPie-specific guard.
+- A dotted TeaPie variable name (e.g. `Temp.FreePartners`) used directly in a condition is evaluated as a single undefined identifier, not resolved as a nested member access — wrap it as `{{ Temp.FreePartners }}` inside the condition if you need its actual value.
+- `{% assign %}` used at the loop-body level is scoped to that iteration; `{% assign %}` used at the top level of the file (outside any loop) sets a real TeaPie variable, visible to the rest of the file and to later requests, exactly like `tp.SetVariable(...)` would.
+
 ## Guards and Error Handling
 
 Templating fails loudly instead of silently producing zero or empty requests:
@@ -205,14 +233,16 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Variable exists but is not a collection | Error stating the variable must be a collection* |
 | Collection resolves to zero items (empty list, `()`, or a numeric range with no items) | Error — an accidentally empty collection is almost always a mistake* |
 | Loop would expand to more than **1000** requests | Error, to prevent runaway expansion |
+| A numeric range bound (e.g. `(1..99999999999)`) is too large to fit a 32-bit integer | Error naming the offending bound, instead of a raw overflow failure* |
 | Missing `{% endfor %}`, a stray `{% endfor %}` with no matching `{% for %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag |
 | Nested `{% for %}` loops | Supported — see [Multiple Loops in One File](#multiple-loops-in-one-file); a nesting-root loop's combined request count (across all its nesting levels) is what counts against the 1000-request limit above |
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
+| Rendering the file requires more than **200 000** Fluid evaluation steps (e.g. many `{{ }}`/`{% %}` expressions repeated across items) | Error suggesting the file be checked for repeated expressions or split into smaller loops — this is separate from, and on top of, the 1000-request cap |
 | Two or more requests share the same `# @name` after expansion | Warning (not an error) — see [Naming Requests Inside a Loop](#naming-requests-inside-a-loop) |
 
 All errors include the request file's path to make them actionable.
 
-\* These three guards apply to a loop's own source expression. For an **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` in the [nested-loop example](#multiple-loops-in-one-file) above) — a source TeaPie cannot pre-resolve before rendering — these guards are not enforced; Fluid's own `{% for %}` semantics apply instead, so a missing, non-collection, or empty per-iteration source silently produces zero requests for that outer item rather than raising an error.
+\* These guards apply to a loop's own source expression. For an **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` in the [nested-loop example](#multiple-loops-in-one-file) above) — a source TeaPie cannot pre-resolve before rendering — these guards are not enforced; Fluid's own `{% for %}` semantics apply instead, so a missing, non-collection, empty, or oversized per-iteration source silently produces zero requests (or is left to Fluid/.NET's own behavior) for that outer item rather than raising an error.
 
 ## Inspecting the Expanded Content
 

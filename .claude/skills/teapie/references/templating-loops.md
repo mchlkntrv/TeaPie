@@ -6,7 +6,7 @@ Expand a single request block in a `.http`/`.tp` file into many independent requ
 
 **Where:** `.http` request files and `.tp` files (in their `--- HTTP` section)
 
-Loop expansion runs **after** the pre-request (`-init.csx`) script and **before** requests are split into individual test steps, so a variable set via `tp.SetVariable(...)` is already available as a loop source. Each resulting request behaves exactly like a normal request: its own name, its own directives, its own report entry. Files without a `{% for %}` tag are left completely unchanged.
+Loop expansion runs **after** the pre-request (`-init.csx`) script and **before** requests are split into individual test steps, so a variable set via `tp.SetVariable(...)` is already available as a loop source. Each resulting request behaves exactly like a normal request: its own name, its own directives, its own report entry. Files with no Fluid tag (`{%`) anywhere are left completely unchanged — but a file using only `{% if %}`/`{% assign %}` with no `{% for %}` at all is still parsed and rendered (see [Conditions and assignments](#conditions-and-assignments) below).
 
 ## Collection Sources
 
@@ -64,6 +64,10 @@ Content-Type: application/json
 
 All requests produced by a nesting-root loop (outer loop + everything nested inside it) count together against the 1000-request expansion limit.
 
+## Conditions and assignments
+
+Inside a loop body — or at the top level with no loop at all — `{% if %}`/`{% elsif %}`/`{% else %}`/`{% unless %}` and `{% assign %}` are also supported, with plain Fluid semantics. An undefined name in a condition is falsy, not an error. A dotted TeaPie variable name (e.g. `Temp.FreePartners`) used directly in a condition is read as member access on `Temp` (undefined), not as the bridged variable — wrap it as `{{ Temp.FreePartners }}` if you need its value. A top-level `{% assign %}` (outside any loop) sets a real TeaPie variable, same as `tp.SetVariable(...)`; a loop-body `{% assign %}` stays local to that iteration.
+
 ## Guards and Error Handling
 
 Templating fails loudly instead of silently producing zero or empty requests:
@@ -71,12 +75,16 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Situation | Result |
 | --- | --- |
 | Collection variable does not exist / isn't a collection / resolves to zero items | Error — naming the file and the problem* |
+| A numeric range bound (e.g. `(1..99999999999)`) is too large for a 32-bit integer | Error naming the offending bound, instead of a raw overflow failure* |
 | Loop would expand to more than **1000** requests | Error |
+| Rendering needs more than **200 000** Fluid evaluation steps (too many `{{ }}`/`{% %}` expressions across items) | Error — separate from, and on top of, the 1000-request cap |
 | Missing `{% endfor %}`, a stray `{% endfor %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag |
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
 | Two or more requests share the same `# @name` after expansion | Warning, not an error |
 
-\* For an **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` above), TeaPie cannot pre-resolve it, so these guards aren't enforced — a missing/empty per-iteration source there silently produces zero requests for that outer item instead of erroring.
+All of the above errors include the request file's path.
+
+\* For an **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` above), TeaPie cannot pre-resolve it, so these guards aren't enforced — a missing/empty/oversized per-iteration source there silently produces zero requests for that outer item instead of erroring.
 
 ## Current Limitations
 
