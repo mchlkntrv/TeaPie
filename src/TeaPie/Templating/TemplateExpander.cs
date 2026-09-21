@@ -30,7 +30,7 @@ internal sealed partial class TemplateExpander(
             return content;
         }
 
-        var blocks = scanner.FindLoopBlocks(content);
+        var blocks = FindLoopBlocks(scanner, content, filePath);
         var sources = new LoopSource?[blocks.Count];
         var edits = new List<TextEdit>();
 
@@ -43,7 +43,7 @@ internal sealed partial class TemplateExpander(
                 continue;
             }
 
-            var source = sourceResolver.Resolve(block.SourceExpression);
+            var source = ResolveSource(sourceResolver, block.SourceExpression, filePath);
             sources[i] = source;
 
             if (source.ItemCount == 0)
@@ -177,6 +177,38 @@ internal sealed partial class TemplateExpander(
         }
 
         return rendered;
+    }
+
+    private static IReadOnlyList<LoopBlock> FindLoopBlocks(ILoopBlockScanner scanner, string content, string filePath)
+    {
+        try
+        {
+            return scanner.FindLoopBlocks(content);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new InvalidOperationException(
+                $"Templating error in '{filePath}': {StripTemplatingErrorPrefix(ex.Message)}", ex);
+        }
+    }
+
+    private static LoopSource ResolveSource(ICollectionSourceResolver sourceResolver, string sourceExpression, string filePath)
+    {
+        try
+        {
+            return sourceResolver.Resolve(sourceExpression);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new InvalidOperationException(
+                $"Templating error in '{filePath}': {StripTemplatingErrorPrefix(ex.Message)}", ex);
+        }
+    }
+
+    private static string StripTemplatingErrorPrefix(string message)
+    {
+        const string prefix = "Templating error: ";
+        return message.StartsWith(prefix, StringComparison.Ordinal) ? message[prefix.Length..] : message;
     }
 
     private static bool IsRenderStepLimitExceeded(InvalidOperationException ex)

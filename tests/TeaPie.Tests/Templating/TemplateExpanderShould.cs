@@ -89,6 +89,19 @@ public class TemplateExpanderShould
     }
 
     [Fact]
+    public void IncludeTheRequestFilePathWhenALoopTagIsMalformed()
+    {
+        const string content = "{% for a in (1..2) %}[{{ a }}]{% endfor %}\n{% endfor %}";
+        var expander = CreateExpander();
+
+        var act = () => expander.Expand(content, "loops/malformed-req.http");
+
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("loops/malformed-req.http");
+        exception.Message.Should().Contain("endfor");
+    }
+
+    [Fact]
     public void ExpandNumericRangeWithoutAnyVariable()
     {
         const string content = "{% for i in (1..3) %}[{{ i }}]{% endfor %}";
@@ -1184,6 +1197,30 @@ public class TemplateExpanderShould
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*collection variable 'SeededPartners'*was not found*");
+    }
+
+    [Theory]
+    [InlineData(
+        "{% for p in SeededPartners %}{{ p.Name }}{% endfor %}",
+        "collection variable 'SeededPartners'", "was not found")]
+    [InlineData(
+        "{% for p in NotACollection %}{{ p }}{% endfor %}",
+        "variable 'NotACollection'", "must be a collection")]
+    [InlineData(
+        "{% for s in (\"a\",) %}{{ s }}{% endfor %}",
+        "inline collection", "empty item")]
+    public void IncludeTheRequestFilePathWhenACollectionSourceFailsToResolve(
+        string content, string firstDetail, string secondDetail)
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("NotACollection", 42);
+
+        var act = () => CreateExpander(variables).Expand(content, "loops/partners-req.http");
+
+        var exception = act.Should().Throw<InvalidOperationException>().Which;
+        exception.Message.Should().Contain("loops/partners-req.http");
+        exception.Message.Should().Contain(firstDetail);
+        exception.Message.Should().Contain(secondDetail);
     }
 
     [Fact]
