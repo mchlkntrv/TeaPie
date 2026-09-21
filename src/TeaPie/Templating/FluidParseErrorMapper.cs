@@ -2,13 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace TeaPie.Templating;
 
-// Fluid parses the masked/rewritten text TeaPie hands it (see TemplateExpander), so a genuine Fluid
-// parse error carries a "(line:column)" position and a "Source:" line quoted from that rewritten
-// text, not from the .http file the user actually wrote. This remaps both back onto the original
-// content using the TransformedTextSpan map TextEditApplier.Apply produces, so the position/source
-// TeaPie reports always match what the user sees in their file - the same guarantee
-// LoopBlockScanner's structural errors already have (they run before any rewrite happens, so they
-// never had this problem to begin with).
 internal static partial class FluidParseErrorMapper
 {
     public static string RemapToOriginal(
@@ -18,8 +11,6 @@ internal static partial class FluidParseErrorMapper
 
         if (!match.Success)
         {
-            // Fluid didn't give us a position to remap (or its message format changed) - fall back to
-            // the raw message rather than guessing at a position.
             return parseError;
         }
 
@@ -40,9 +31,6 @@ internal static partial class FluidParseErrorMapper
         {
             if (transformedOffset >= span.TransformedStart && transformedOffset < span.TransformedEnd)
             {
-                // A position inside an edit's replacement text (e.g. a masked '{% raw %}' wrapper or an
-                // injected loop-tree marker) has no character-for-character counterpart in the original -
-                // point at where that replacement began, the closest meaningful original position.
                 return span.IsEdited
                     ? span.OriginalStart
                     : span.OriginalStart + (transformedOffset - span.TransformedStart);

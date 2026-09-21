@@ -17,10 +17,6 @@ internal static partial class TemplatingTestHelpers
             vars);
     }
 
-    /// <summary>
-    /// Extracts the "(line:column)" position Fluid embeds in a parse-error message, so tests can
-    /// assert on it independently of the surrounding wording.
-    /// </summary>
     public static (int Line, int Column) ExtractReportedPosition(string message)
     {
         var match = PositionRegex().Match(message);
@@ -28,11 +24,6 @@ internal static partial class TemplatingTestHelpers
         return (int.Parse(match.Groups["line"].Value), int.Parse(match.Groups["column"].Value));
     }
 
-    /// <summary>
-    /// Computes the 1-based (line, column) of the start of <paramref name="substring"/>'s first
-    /// occurrence in <paramref name="content"/>, using the same original text the user authored -
-    /// this is the independent "expected" oracle the fixed error message is compared against.
-    /// </summary>
     public static (int Line, int Column) FindOriginalPosition(string content, string substring)
     {
         var index = content.IndexOf(substring, StringComparison.Ordinal);

@@ -10,6 +10,4 @@ var newCustomers = GenerateCustomers(3);
 tp.SetVariable("NewCustomersBatch", newCustomers, "customers");
 tp.SetVariable("NewCustomersBatchCount", newCustomers.Count, "customers");
 
-// Kept separately (instead of relying on the 'Customer' type in the test script) so the
-// post-response script doesn't need to load the 'Customer' class definition itself.
 tp.SetVariable("NewCustomersBatchNames", newCustomers.Select(c => $"{c.FirstName} {c.LastName}").ToList(), "customers");

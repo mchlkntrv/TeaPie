@@ -10,8 +10,6 @@ internal sealed class VariablesFluidModelBuilder : IVariablesFluidModelBuilder
 
         foreach (var scope in GetScopesInAscendingPriorityOrder(variables))
         {
-            // Defensive: a mocked IVariables can return null for an unconfigured scope; the production
-            // Variables implementation never does.
             if (scope is null)
             {
                 continue;
@@ -31,8 +29,6 @@ internal sealed class VariablesFluidModelBuilder : IVariablesFluidModelBuilder
         return model;
     }
 
-    // Ascending priority (last write wins) — the exact reverse of Variables.GetAllVariables()'s
-    // first-match-wins order. Keep these two in sync if either changes.
     private static IEnumerable<VariablesCollection> GetScopesInAscendingPriorityOrder(IVariables variables) =>
     [
         variables.GlobalVariables,

@@ -11,8 +11,6 @@ tp.SetVariable("CustomersWithCarWishlist", new[]
     new { Name = "Bob Smith", Cars = bobCars }
 }, "rentals");
 
-// Flattened, non-anonymous data for the post-response script to verify against
-// (kept separate so the test script doesn't need to reconstruct the anonymous wishlist above).
 tp.SetVariable("WishlistCustomerNames", new List<string> { "Alice Johnson", "Bob Smith" }, "rentals");
 tp.SetVariable("WishlistCarIdsPerCustomer", new List<List<long>>
 {

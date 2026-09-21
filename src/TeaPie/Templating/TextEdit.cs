@@ -4,10 +4,6 @@ namespace TeaPie.Templating;
 
 internal readonly record struct TextEdit(int Start, int Length, string Replacement);
 
-// One contiguous run of the transformed text, recording where it came from in the original text.
-// An IsEdited span holds a TextEdit's replacement text, which has no character-for-character
-// counterpart in the original - OriginalStart for those spans is the edit's own start, the closest
-// meaningful original-text position available.
 internal readonly record struct TransformedTextSpan(
     int TransformedStart, int TransformedEnd, int OriginalStart, int OriginalEnd, bool IsEdited);
 

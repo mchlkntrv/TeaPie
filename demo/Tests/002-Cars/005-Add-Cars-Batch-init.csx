@@ -8,6 +8,4 @@ var newCars = GenerateCars(5);
 tp.SetVariable("NewCarsBatch", newCars, "cars");
 tp.SetVariable("NewCarsBatchCount", newCars.Count, "cars");
 
-// Kept separately (instead of relying on the 'Car' type in the test script) so the
-// post-response script doesn't need to load the 'Car' class definition itself.
 tp.SetVariable("NewCarsBatchBrands", newCars.Select(car => car.Brand).ToList(), "cars");

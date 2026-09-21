@@ -145,8 +145,6 @@ internal sealed partial class TemplateExpander(
 
             if (startIndex < 0 || endIndex < 0)
             {
-                // The nesting-root tree sits inside a top-level if/unless condition that was
-                // false, so Fluid never rendered the block (or its markers) at all. Nothing to count.
                 continue;
             }
 

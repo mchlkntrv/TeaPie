@@ -95,9 +95,6 @@ public class VariablesFluidModelBuilderShould
     [Fact]
     public void KeyADottedVariableNameByItsLiteralDottedStringRatherThanNestingIt()
     {
-        // Confirms the dotted-name limitation lives in Fluid's expression parsing, not in this
-        // bridge: the entry is present and correctly keyed, but Fluid reads "Temp.FreePartners"
-        // in an expression as member access on a root identifier "Temp", which is absent.
         var variables = new global::TeaPie.Variables.Variables();
         variables.CollectionVariables.Set("Temp.FreePartners", new List<string> { "a" });
         var builder = new VariablesFluidModelBuilder();
