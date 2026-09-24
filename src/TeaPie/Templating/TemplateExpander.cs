@@ -98,6 +98,11 @@ internal sealed partial class TemplateExpander(
                 edits.Add(new TextEdit(
                     block.SourceExpressionStartIndex, block.SourceExpressionRawLength, $"{SourceAliasPrefix}{i}"));
             }
+            else if (isRequired)
+            {
+                edits.Add(new TextEdit(
+                    block.SourceExpressionStartIndex, block.SourceExpressionRawLength, effectiveExpression));
+            }
         }
 
         return sources;

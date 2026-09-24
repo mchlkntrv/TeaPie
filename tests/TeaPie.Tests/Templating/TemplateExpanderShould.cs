@@ -1263,6 +1263,16 @@ public class TemplateExpanderShould
         result.Should().Be("Acme");
     }
 
+    [Fact]
+    public void NotThrowWhenATopLevelNumericRangeSourceHasARedundantRequiredModifier()
+    {
+        const string content = "{% for i in (1..3) | required %}{{ i }}{% endfor %}";
+
+        var result = CreateExpander().Expand(content, "test.http");
+
+        result.Should().Be("123");
+    }
+
     private static string FormatRequest(string name)
         => $"### {name}\nGET https://example.test/{name}\n\n";
 
