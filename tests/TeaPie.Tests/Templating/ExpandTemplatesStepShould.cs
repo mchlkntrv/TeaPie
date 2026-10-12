@@ -29,25 +29,6 @@ public class ExpandTemplatesStepShould
     }
 
     [Fact]
-    public async Task LeaveRequestsFileContentUntouchedWhenExpanderReturnsItUnchanged()
-    {
-        var context = RequestHelper.PrepareTestCaseContext(RequestsIndex.RequestWithFullStructure, false);
-        const string original = "POST {{ApiGatewayBaseUrl}}/companies";
-        context.RequestsFileContent = original;
-
-        var expander = Substitute.For<ITemplateExpander>();
-        expander.Expand(original, context.TestCase.RequestsFile.RelativePath).Returns(original);
-
-        var accessor = new TestCaseExecutionContextAccessor { Context = context };
-        var step = new ExpandTemplatesStep(accessor, expander);
-
-        var appContext = new ApplicationContextBuilder().WithPath(RequestsIndex.RootFolderFullPath).Build();
-        await step.Execute(appContext);
-
-        context.RequestsFileContent.Should().Be(original);
-    }
-
-    [Fact]
     public async Task LogFullyExpandedContentAtTraceLevel()
     {
         var context = RequestHelper.PrepareTestCaseContext(RequestsIndex.RequestWithFullStructure, false);

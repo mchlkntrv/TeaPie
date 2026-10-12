@@ -5,115 +5,52 @@ namespace TeaPie.Tests.Templating;
 
 public class LoopBodyMaskerShould
 {
-    private static string ApplyMask(string content)
-    {
-        var blocks = new LoopBlockScanner().FindLoopBlocks(content);
-        var edits = new LoopBodyMasker().FindMaskEdits(content, blocks);
-        return TextEditApplier.Apply(content, edits);
-    }
+    [Theory]
+    [InlineData("{% for item in Items %}{{ item.Name }}{{ forloop.index }}{% endfor %}")]
+    [InlineData("{% for item in Items %}{{ label }}{% assign label = item.Name %}{% endfor %}")]
+    [InlineData("{% for t in Items %}{% assign greeting = \"Hello\" %}{{ greeting }}, {{ t.Name }}!{% endfor %}")]
+    [InlineData("{% for t in Items %}{% assign url = \"{{ApiGatewayBaseUrl}}\" %}{{ url }}{% endfor %}")]
+    [InlineData("{% for t in Items %}{% if forloop.first %}{{ t.Name }}{% endif %}{% endfor %}")]
+    [InlineData("{% for t in Items %}{% raw %}{{ApiGatewayBaseUrl}}{{ t.Name }}{% endraw %}{% endfor %}")]
+    [InlineData("{% assign gatewayName = \"gw\" %}{{ gatewayName }}")]
+    [InlineData("{% assign gatewayName = \"gw\" %}{% for o in Outers %}{% for i in o.Items %}{{ gatewayName }}{% endfor %}" +
+        "{% endfor %}")]
+    [InlineData("{% for o in Outers %}{% assign label = o.Name %}{% for i in o.Items %}{{ o.Name }}{{ i.Value }}" +
+        "{{ label }}{{ forloop.index }}{% endfor %}{% endfor %}")]
+    public void LeaveTokensBoundByALoopOrAssignUnmasked(string content)
+        => ApplyMask(content).Should().Be(content);
 
-    [Fact]
-    public void MaskATeaPieTokenThatDoesNotBelongToAnyLoopScope()
-    {
-        const string content = "{{ApiGatewayBaseUrl}}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
-    }
-
-    [Fact]
-    public void LeaveTheLoopVariableAndForloopTokensInsideTheirOwnLoopBodyUnmasked()
-    {
-        const string content = "{% for item in Items %}{{ item.Name }}{{ forloop.index }}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(content);
-    }
-
-    [Fact]
-    public void LeaveAnInLoopAssignTargetUnmaskedAnywhereInTheSameLoopBodyRegardlessOfOrder()
-    {
-        const string content =
-            "{% for item in Items %}{{ label }}{% assign label = item.Name %}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(content);
-    }
-
-    [Fact]
-    public void MaskATeaPieTokenInsideAnIfBlockThatDoesNotBelongToLoopScope()
-    {
-        const string content =
-            "{% for item in Items %}{% if item.Name == \"Acme\" %}{{ApiGatewayBaseUrl}}{% endif %}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% for item in Items %}{% if item.Name == \"Acme\" %}" +
-            "{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}{% endif %}{% endfor %}");
-    }
-
-    [Fact]
-    public void LeaveATopLevelAssignTargetUnmaskedAfterItsOwnDeclaration()
-    {
-        const string content = "{% assign gatewayName = \"gw\" %}{{ gatewayName }}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(content);
-    }
-
-    [Fact]
-    public void MaskATopLevelTokenReferencingAnAssignTargetDeclaredLaterInTheFile()
-    {
-        const string content = "{{ gatewayName }}{% assign gatewayName = \"gw\" %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% raw %}{{ gatewayName }}{% endraw %}{% assign gatewayName = \"gw\" %}");
-    }
-
-    [Fact]
-    public void LeaveATopLevelAssignTargetDeclaredBeforeALoopUnmaskedInsideThatLoopsBody()
-    {
-        const string content =
-            "{% assign gatewayName = \"gw\" %}{% for item in Items %}{{ gatewayName }}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(content);
-    }
-
-    [Fact]
-    public void NotLeakAnInLoopAssignTargetIntoASiblingLoopsBody()
-    {
-        const string content =
-            "{% for a in Items %}{% assign shared = a.Name %}{% endfor %}" +
-            "{% for b in Items %}{{ shared }}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% for a in Items %}{% assign shared = a.Name %}{% endfor %}" +
-            "{% for b in Items %}{% raw %}{{ shared }}{% endraw %}{% endfor %}");
-    }
-
-    [Fact]
-    public void NotLeakAnInLoopAssignTargetIntoTopLevelTextAfterTheLoopEnds()
-    {
-        const string content =
-            "{% for a in Items %}{% assign shared = a.Name %}{% endfor %}{{ shared }}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% for a in Items %}{% assign shared = a.Name %}{% endfor %}" +
-            "{% raw %}{{ shared }}{% endraw %}");
-    }
+    [Theory]
+    [InlineData("{{ApiGatewayBaseUrl}}", "<{{ApiGatewayBaseUrl}}>")]
+    [InlineData("{{ gatewayName }}{% assign gatewayName = \"gw\" %}", "<{{ gatewayName }}>{% assign gatewayName = \"gw\" %}")]
+    [InlineData("{% for t in Items %}POST {{ApiGatewayBaseUrl}}/{{ t.Name }}{{tSomethingElse}}{% endfor %}",
+        "{% for t in Items %}POST <{{ApiGatewayBaseUrl}}>/{{ t.Name }}<{{tSomethingElse}}>{% endfor %}")]
+    [InlineData("{% for t in Items %}{% if t.Name == \"Acme\" %}{{ApiGatewayBaseUrl}}{% endif %}{% endfor %}",
+        "{% for t in Items %}{% if t.Name == \"Acme\" %}<{{ApiGatewayBaseUrl}}>{% endif %}{% endfor %}")]
+    [InlineData("{% for t in Items %}{% assign greeting = \"Hi\" %}{{ greeting }}{{greetingX}}{% endfor %}",
+        "{% for t in Items %}{% assign greeting = \"Hi\" %}{{ greeting }}<{{greetingX}}>{% endfor %}")]
+    [InlineData("{% for t in Items %}{% raw %}{{ t.Name }}{% endraw %}{{ApiGatewayBaseUrl}}{% endfor %}",
+        "{% for t in Items %}{% raw %}{{ t.Name }}{% endraw %}<{{ApiGatewayBaseUrl}}>{% endfor %}")]
+    [InlineData("{% for t in Items %}{% raw %}{% assign greeting = \"Hi\" %}{% endraw %}{{ greeting }}{% endfor %}",
+        "{% for t in Items %}{% raw %}{% assign greeting = \"Hi\" %}{% endraw %}<{{ greeting }}>{% endfor %}")]
+    [InlineData("{% for a in Items %}{% assign shared = a.Name %}{% endfor %}{% for b in Items %}{{ shared }}{% endfor %}" +
+        "{{ shared }}",
+        "{% for a in Items %}{% assign shared = a.Name %}{% endfor %}{% for b in Items %}<{{ shared }}>{% endfor %}" +
+        "<{{ shared }}>")]
+    [InlineData("{% for o in Outers %}{% for a in o.As %}{% assign flag = true %}{% endfor %}" +
+        "{% for b in o.Bs %}{{ flag }}{% endfor %}{{ flag }}{% endfor %}",
+        "{% for o in Outers %}{% for a in o.As %}{% assign flag = true %}{% endfor %}" +
+        "{% for b in o.Bs %}<{{ flag }}>{% endfor %}<{{ flag }}>{% endfor %}")]
+    [InlineData("{% for t in Items %}{{$guid}}-{{ t.Name }}-{{$randomInt 1 100}}{{$add {{X}} {{Y}}}}" +
+        "{{$outer {{$inner {{X}} 1}} 2}}{{$add {{X}} 1}}{{$add {{Y}} 1}}{% endfor %}",
+        "{% for t in Items %}<{{$guid}}>-{{ t.Name }}-<{{$randomInt 1 100}}><{{$add {{X}} {{Y}}}}>" +
+        "<{{$outer {{$inner {{X}} 1}} 2}}><{{$add {{X}} 1}}><{{$add {{Y}} 1}}>{% endfor %}")]
+    [InlineData("{% for t in Items %}{{ApiGatewayBaseUrl}}/{{ forloop.index | prepend: \"{{Temp.Id_\" | append: \"}}\" }}" +
+        "{% endfor %}",
+        "{% for t in Items %}<{{ApiGatewayBaseUrl}}>/{{ forloop.index | prepend: \"{{Temp.Id_\" | append: \"}}\" }}" +
+        "{% endfor %}")]
+    public void WrapTokensOutsideAnyLoopOrAssignScopeInARawBlock(string content, string expected)
+        => ApplyMask(content).Should().Be(expected.Replace("<{{", "{% raw %}{{").Replace("}}>", "}}{% endraw %}"));
 
     [Fact]
     public void FindTopLevelAssignTargetNamesButNotInLoopOnes()
@@ -124,291 +61,13 @@ public class LoopBodyMaskerShould
 
         var names = new LoopBodyMasker().FindTopLevelAssignTargetNames(content, blocks);
 
-        names.Should().BeEquivalentTo(new[] { "topLevel" });
+        names.Should().BeEquivalentTo(["topLevel"]);
     }
 
-    [Fact]
-    public void MaskATeaPieTokenButLeaveTheLoopVariableTokenUntouchedWhenBothAppearInTheSameBody()
+    private static string ApplyMask(string content)
     {
-        const string content =
-            "{% for tenant in Items %}POST {{ApiGatewayBaseUrl}}/companies { \"name\": \"{{ tenant.Name }}\" }{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Contain("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
-        result.Should().Contain("{{ tenant.Name }}");
-        result.Should().NotContain("{% raw %}{{ tenant.Name }}{% endraw %}");
-    }
-
-    [Fact]
-    public void NotSplitADynamicNamingExpressionAtEmbeddedLiteralBraces()
-    {
-        const string content =
-            "{% for tenant in Items %}POST {{ApiGatewayBaseUrl}}/companies/" +
-            "{{ forloop.index | prepend: \"{{Temp.Attachments.CompanyId_\" | append: \"}}\" }}" +
-            "/licenses{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Contain(
-            "{{ forloop.index | prepend: \"{{Temp.Attachments.CompanyId_\" | append: \"}}\" }}");
-        result.Should().Contain("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
-    }
-
-    [Fact]
-    public void MaskAVariableThatOnlySharesAPrefixWithTheLoopVariable()
-    {
-        const string content = "{% for tenant in Items %}{{tenantSomethingElse}}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Contain("{% raw %}{{tenantSomethingElse}}{% endraw %}");
-    }
-
-    [Fact]
-    public void NotDoubleWrapATeaPieTokenAlreadyInsideAUserAuthoredRawBlock()
-    {
-        const string content = "{% for tenant in Items %}{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(content);
-    }
-
-    [Fact]
-    public void LeaveALoopVariableTokenUntouchedInsideAUserAuthoredRawBlock()
-    {
-        const string content = "{% for tenant in Items %}{% raw %}{{ tenant.Name }}{% endraw %}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(content);
-    }
-
-    [Fact]
-    public void StillMaskATeaPieTokenOutsideAnUnrelatedRawBlockInTheSameLoopBody()
-    {
-        const string content =
-            "{% for tenant in Items %}{% raw %}{{ tenant.Name }}{% endraw %}{{ApiGatewayBaseUrl}}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% for tenant in Items %}{% raw %}{{ tenant.Name }}{% endraw %}" +
-            "{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}{% endfor %}");
-    }
-
-    [Fact]
-    public void LeaveAnAssignedVariableTokenUntouchedAlongsideTheLoopVariable()
-    {
-        const string content =
-            "{% for tenant in Items %}{% assign greeting = \"Hello\" %}{{ greeting }}, {{ tenant.Name }}!{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(content);
-    }
-
-    [Fact]
-    public void StillMaskATeaPieTokenNotMatchingAnyAssignedName()
-    {
-        const string content =
-            "{% for tenant in Items %}{% assign greeting = \"Hello\" %}{{ greeting }}{{ApiGatewayBaseUrl}}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Contain("{{ greeting }}");
-        result.Should().Contain("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
-    }
-
-    [Fact]
-    public void MaskAVariableThatOnlySharesAPrefixWithAnAssignedName()
-    {
-        const string content = "{% for tenant in Items %}{% assign greeting = \"Hi\" %}{{greetingSomethingElse}}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Contain("{% raw %}{{greetingSomethingElse}}{% endraw %}");
-    }
-
-    [Fact]
-    public void LeaveATeaPieLookingTokenInsideAnAssignTagsStringLiteralUntouched()
-    {
-        const string content = "{% for tenant in Items %}{% assign url = \"{{ApiGatewayBaseUrl}}\" %}{{ url }}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Contain("{% assign url = \"{{ApiGatewayBaseUrl}}\" %}");
-        result.Should().NotContain("{% raw %}{{ApiGatewayBaseUrl}}{% endraw %}");
-    }
-
-    [Fact]
-    public void NotTreatAnAssignInsideAUserAuthoredRawBlockAsABoundName()
-    {
-        const string content =
-            "{% for tenant in Items %}{% raw %}{% assign greeting = \"Hi\" %}{% endraw %}{{ greeting }}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Contain("{% raw %}{% assign greeting = \"Hi\" %}{% endraw %}");
-        result.Should().Contain("{% raw %}{{ greeting }}{% endraw %}");
-    }
-
-    [Fact]
-    public void LeaveALoopScopedTokenInsideAnIfBlockUntouched()
-    {
-        const string content = "{% for tenant in Items %}{% if forloop.first %}{{ tenant.Name }}{% endif %}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(content);
-    }
-
-    [Fact]
-    public void LeaveTheOuterLoopVariableUnmaskedInsideANestedInnerLoopBody()
-    {
-        const string content =
-            "{% for outer in Outers %}{% for inner in outer.Items %}" +
-            "{{ outer.Name }}{{ inner.Value }}{{ forloop.index }}" +
-            "{% endfor %}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(content);
-    }
-
-    [Fact]
-    public void LeaveAnOuterLoopAssignTargetUnmaskedInsideANestedInnerLoopBody()
-    {
-        const string content =
-            "{% for outer in Outers %}{% assign label = outer.Name %}" +
-            "{% for inner in outer.Items %}{{ label }}{% endfor %}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(content);
-    }
-
-    [Fact]
-    public void MaskAReferenceToAnInnerLoopAssignTargetAfterTheInnerLoopHasEnded()
-    {
-        const string content =
-            "{% for outer in Outers %}{% for inner in outer.Items %}{% assign flag = true %}{% endfor %}" +
-            "{{ flag }}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% for outer in Outers %}{% for inner in outer.Items %}{% assign flag = true %}{% endfor %}" +
-            "{% raw %}{{ flag }}{% endraw %}{% endfor %}");
-    }
-
-    [Fact]
-    public void NotLeakAnInnerLoopAssignTargetToASiblingInnerLoop()
-    {
-        const string content =
-            "{% for outer in Outers %}" +
-            "{% for a in outer.As %}{% assign flag = true %}{% endfor %}" +
-            "{% for b in outer.Bs %}{{ flag }}{% endfor %}" +
-            "{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% for outer in Outers %}" +
-            "{% for a in outer.As %}{% assign flag = true %}{% endfor %}" +
-            "{% for b in outer.Bs %}{% raw %}{{ flag }}{% endraw %}{% endfor %}" +
-            "{% endfor %}");
-    }
-
-    [Fact]
-    public void LeaveATopLevelAssignTargetDeclaredBeforeANestedLoopUnmaskedAtBothNestingLevels()
-    {
-        const string content =
-            "{% assign gatewayName = \"gw\" %}" +
-            "{% for outer in Outers %}{% for inner in outer.Items %}{{ gatewayName }}{% endfor %}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(content);
-    }
-
-    [Fact]
-    public void MaskANoArgumentFunctionTokenInsideALoopBody()
-    {
-        const string content = "{% for tenant in Tenants %}{{$guid}}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be("{% for tenant in Tenants %}{% raw %}{{$guid}}{% endraw %}{% endfor %}");
-    }
-
-    [Fact]
-    public void MaskAFunctionTokenWithAPlainArgumentInsideALoopBody()
-    {
-        const string content = "{% for tenant in Tenants %}{{$randomInt 1 100}}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% for tenant in Tenants %}{% raw %}{{$randomInt 1 100}}{% endraw %}{% endfor %}");
-    }
-
-    [Fact]
-    public void MaskAFunctionTokenWithANestedVariableArgumentAsOneWholeTokenInsideALoopBody()
-    {
-        const string content = "{% for tenant in Tenants %}{{$add {{MyNumber}} 2}}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% for tenant in Tenants %}{% raw %}{{$add {{MyNumber}} 2}}{% endraw %}{% endfor %}");
-    }
-
-    [Fact]
-    public void MaskAFunctionTokenWithTwoNestedVariableArgumentsAsOneWholeTokenInsideALoopBody()
-    {
-        const string content = "{% for tenant in Tenants %}{{$add {{X}} {{Y}}}}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% for tenant in Tenants %}{% raw %}{{$add {{X}} {{Y}}}}{% endraw %}{% endfor %}");
-    }
-
-    [Fact]
-    public void MaskAFunctionTokenWithAMultipleNestedLevelArgumentAsOneWholeTokenInsideALoopBody()
-    {
-        const string content = "{% for tenant in Tenants %}{{$outer {{$inner {{X}} 1}} 2}}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% for tenant in Tenants %}{% raw %}{{$outer {{$inner {{X}} 1}} 2}}{% endraw %}{% endfor %}");
-    }
-
-    [Fact]
-    public void MaskSeveralFunctionTokensAndLeaveTheLoopVariableUnmaskedInTheSameLoopBody()
-    {
-        const string content =
-            "{% for tenant in Tenants %}{{$guid}}-{{ tenant.Name }}-{{$add {{MyNumber}} 2}}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% for tenant in Tenants %}{% raw %}{{$guid}}{% endraw %}-{{ tenant.Name }}-" +
-            "{% raw %}{{$add {{MyNumber}} 2}}{% endraw %}{% endfor %}");
-    }
-
-    [Fact]
-    public void MaskTwoAdjacentFunctionTokensWithNestedArgumentsAndNoSeparatorBetweenThem()
-    {
-        const string content = "{% for tenant in Tenants %}{{$add {{X}} 1}}{{$add {{Y}} 1}}{% endfor %}";
-
-        var result = ApplyMask(content);
-
-        result.Should().Be(
-            "{% for tenant in Tenants %}{% raw %}{{$add {{X}} 1}}{% endraw %}" +
-            "{% raw %}{{$add {{Y}} 1}}{% endraw %}{% endfor %}");
+        var blocks = new LoopBlockScanner().FindLoopBlocks(content);
+        var edits = new LoopBodyMasker().FindMaskEdits(content, blocks);
+        return TextEditApplier.Apply(content, edits);
     }
 }
