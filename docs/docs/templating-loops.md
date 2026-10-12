@@ -92,6 +92,26 @@ Content-Type: application/json
 
 `(1..5)` is inclusive on both ends and produces 5 iterations.
 
+## Loop Options
+
+A collection can be followed by options, separated by spaces, in any order:
+
+| Option | Meaning |
+| --- | --- |
+| `limit: n` | Iterate over at most `n` items (standard Liquid) |
+| `offset: n` | Skip the first `n` items (standard Liquid) |
+| `reversed` | Iterate in reverse order, applied after `offset`/`limit` (standard Liquid) |
+
+```http
+{% for partner in Partners offset: 1 limit: 10 reversed %}
+...
+{% endfor %}
+```
+
+The value of `limit:`/`offset:` can be a number or a variable (`limit: MaxPartners`). A literal `limit:` also lowers the count used by the 1000-request guard below; a variable one does not, since its value is not known before rendering.
+
+A loop source does **not** accept filters — `{% for x in Items | sort %}` is an error, because Liquid's `for` tag only takes a collection followed by the options above.
+
 ## The `forloop` Object
 
 Inside a loop body, `{{ forloop.index }}` gives the current **1-based** iteration number. It is commonly used to build unique request names (`# @name CreateItem{{ forloop.index }}`) and unique values inside the request body.
@@ -231,7 +251,8 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | --- | --- |
 | Collection variable does not exist | Error naming the missing variable and the file* |
 | Variable exists but is not a collection | Error stating the variable must be a collection* |
-| Collection resolves to zero items (empty list, `()`, or a numeric range with no items) | Error — an accidentally empty collection is almost always a mistake* (for an **inner** loop, only when its source is marked `\| required` — see [below](#marking-an-inner-loop-source-as-required)) |
+| Collection resolves to zero items (empty list, `()`, or a numeric range with no items) | Error — an accidentally empty collection is almost always a mistake* (for an **inner** loop, a log message instead — see [below](#empty-inner-collections)) |
+| A filter in a loop source (e.g. `{% for x in Items \| sort %}`), an unknown or duplicated loop option | Error naming the source and listing the supported [loop options](#loop-options) |
 | Loop would expand to more than **1000** requests | Error, to prevent runaway expansion |
 | A numeric range bound (e.g. `(1..99999999999)`) is too large to fit a 32-bit integer | Error naming the offending bound, instead of a raw overflow failure* |
 | Missing `{% endfor %}`, a stray `{% endfor %}` with no matching `{% for %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag |
@@ -239,30 +260,37 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
 | Rendering the file requires more than **200 000** Fluid evaluation steps (e.g. many `{{ }}`/`{% %}` expressions repeated across items) | Error suggesting the file be checked for repeated expressions or split into smaller loops — this is separate from, and on top of, the 1000-request cap |
 | Two or more requests share the same `# @name` after expansion | Warning (not an error) — see [Naming Requests Inside a Loop](#naming-requests-inside-a-loop) |
+| An inner loop's collection is empty for every outer item, so it generated no requests | Warning (not an error) — see [Empty Inner Collections](#empty-inner-collections) |
+| A loop whose body declares requests generated none (e.g. `offset:` past the end, `limit: 0`, or an `{% if %}` that excluded every item) | Warning (not an error), naming the loop and the file. A loop placed inside a request body (e.g. building a JSON array) declares no requests and is not checked |
 
 All errors include the request file's path to make them actionable.
 
-\* These guards apply to a loop's own source expression. A **top-level** source is resolved once, before rendering. An **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` in the [nested-loop example](#multiple-loops-in-one-file) above) is instead resolved once per outer iteration, right before that iteration renders — a missing property or a value that isn't a collection is still an error, unconditionally, the same as for a top-level source (naming the offending outer item too). The one exception is an **empty** per-iteration collection: since a genuinely empty child collection (e.g. a company with no customers) is often valid rather than a mistake, it silently produces zero requests for that outer item unless the loop's source is explicitly marked `| required` — see [Marking an Inner Loop Source as Required](#marking-an-inner-loop-source-as-required). The 1000-request and malformed-tag guards are unaffected by any of this.
+\* These guards apply to a loop's own source expression. A **top-level** source is resolved once, before rendering. An **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` in the [nested-loop example](#multiple-loops-in-one-file) above) is instead checked during rendering, every time that inner loop is about to run, in exactly the same scope the loop itself sees — so TeaPie variables, `{% assign %}` values and enclosing loop variables (including indexers such as `company.Groups[group]`) resolve the same way in the check as in the loop. A missing property or a value that isn't a collection (including `null`) is an error, unconditionally, the same as for a top-level source, and names the offending outer item(s) as a path such as `region[0].country[1]` — the item's position in its source collection, even when the outer loop uses `offset:` or `reversed`. The one exception is an **empty** per-iteration collection — see [Empty Inner Collections](#empty-inner-collections). The 1000-request and malformed-tag guards are unaffected by any of this.
 
-### Marking an Inner Loop Source as Required
+### Empty Inner Collections
 
-An inner loop's source is allowed to resolve to an empty collection for some outer items without raising an error — a company with no customers is often a perfectly valid case, not a mistake. Add a `| required` modifier to the source expression when an empty result *should* be treated as an error for that specific loop:
+An inner loop's source may legitimately be empty for some outer items — a newly created company with no customers yet is a valid case, not a mistake — so it is **not** an error. That outer item simply produces no requests from the inner loop (or renders the loop's `{% else %}` branch, if it has one), while everything else in the file runs normally:
 
 ```http
 {% for company in Companies %}
-{% for license in company.Licenses | required %}
-### Activate license {{ forloop.index }}: {{ company.Name }} / {{ license }}
-POST {{ApiBaseUrl}}/companies/{{ company.Name }}/licenses/activate
-Content-Type: application/json
+### Create company {{ company.Name }}
+POST {{ApiBaseUrl}}/companies
 
-{ "type": "{{ license }}" }
+{% for customer in company.Customers %}
+### Add customer {{ customer.Name }} to {{ company.Name }}
+POST {{ApiBaseUrl}}/companies/{{ company.Name }}/customers
 {% endfor %}
 {% endfor %}
 ```
 
-If any company in `Companies` has an empty (or missing/`null`) `Licenses` collection, this raises the same "produced zero items" error a top-level empty loop would. `| required` only changes the empty-collection check — a missing property or a non-collection value on an inner loop's source is already an error with or without it.
+So that this never happens silently, TeaPie reports it in the log:
 
-`| required` is accepted on a top-level loop's source too, but has no effect there — an empty top-level collection is already an unconditional error.
+| Situation | Log message |
+| --- | --- |
+| The inner collection is empty for **some** outer items | **Debug** (visible with `--debug`), one per empty outer item, naming it — e.g. `Loop over 'company.Customers' in 'seed-req.http' produced zero items for company[1], so it generated no requests there.` |
+| The inner collection is empty for **every** outer item, so the inner loop generated no requests at all | **Warning** (visible by default), once per loop — e.g. `Loop over 'company.Customers' in 'seed-req.http' produced zero items for every one of its 2 outer item(s), so it generated no requests at all. Check that the collection is filled as expected.` |
+
+The emptiness is checked against the source collection, before any `limit:`/`offset:` is applied.
 
 ## Inspecting the Expanded Content
 
@@ -305,4 +333,6 @@ This is a first iteration of templating support. The following are **not** suppo
 - Any Liquid/Fluid tag besides `{% for %}` / `{% endfor %}` / `{% if %}` / `{% elsif %}` / `{% else %}` / `{% unless %}` / `{% assign %}`
 - Templating inside `.csx` scripts (only `.http`/`.tp` request content is expanded)
 - External data files (CSV/JSON) as a collection source
+- Filters in a loop source (see [Loop Options](#loop-options))
+- A top-level loop source other than a TeaPie variable name (dotted names included), an inline literal list or a numeric range — a member path (`Root.Children`), an indexer (`Regions[0].Countries`) or a variable created with `{% assign %}` cannot be looped over at the top level. An inner loop's source is evaluated per outer item only when it starts with an enclosing loop's variable (`company.Licenses`, `company[key]`); any other inner source is resolved like a top-level one
 - Parallel execution of the requests produced by a loop

@@ -9,6 +9,6 @@ internal static class FluidExpressionIdentifier
             return false;
         }
 
-        return expression.Length == identifier.Length || expression[identifier.Length] is '.' or ' ' or '|' or '\t';
+        return expression.Length == identifier.Length || expression[identifier.Length] is '.' or '[' or ' ' or '|' or '\t';
     }
 }

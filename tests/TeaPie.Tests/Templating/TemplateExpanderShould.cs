@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using static TeaPie.Tests.Templating.TemplatingTestHelpers;
 using TeaPie.Templating;
@@ -244,7 +245,8 @@ public class TemplateExpanderShould
         resolver.Resolve("Weird").Returns(new LoopSource(new List<object>(), 3));
         var expander = new TemplateExpander(
             new LoopBlockScanner(), new LoopBodyMasker(), resolver, new VariablesFluidModelBuilder(),
-            new global::TeaPie.Variables.Variables(), new TemplatingLimits());
+            new global::TeaPie.Variables.Variables(), new TemplatingLimits(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<TemplateExpander>.Instance);
 
         var result = expander.Expand(content, "test.http");
 
@@ -1208,7 +1210,7 @@ public class TemplateExpanderShould
     }
 
     [Fact]
-    public void ThrowWhenAnInnerDynamicLoopSourcePropertyIsNullEvenWithoutRequired()
+    public void ThrowWhenAnInnerDynamicLoopSourcePropertyIsNull()
     {
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Companies", new object[] { new { Name = "Acme", Licenses = (string[]?)null } });
@@ -1223,54 +1225,36 @@ public class TemplateExpanderShould
     }
 
     [Fact]
-    public void ThrowWhenAnInnerDynamicLoopSourceMarkedRequiredIsEmpty()
-    {
-        var variables = new global::TeaPie.Variables.Variables();
-        variables.SetVariable("Companies", new object[] { new { Name = "Acme", Licenses = new string[0] } });
-        const string content =
-            "{% for company in Companies %}{% for license in company.Licenses | required %}" +
-            "[{{ company.Name }}:{{ license }}]{% endfor %}{% endfor %}";
-
-        var act = () => CreateExpander(variables).Expand(content, "test.http");
-
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*loop over 'company.Licenses'*produced zero items*");
-    }
-
-    [Fact]
-    public void RenderNormallyWhenAnInnerDynamicLoopSourceMarkedRequiredIsNonEmpty()
+    public void ThrowForTheUnsupportedRequiredLoopOption()
     {
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("Companies", new object[] { new { Name = "Acme", Licenses = new[] { "BASIC" } } });
         const string content =
-            "{% for company in Companies %}{% for license in company.Licenses | required %}" +
-            "[{{ company.Name }}:{{ license }}]{% endfor %}{% endfor %}";
+            "{% for company in Companies %}{% for license in company.Licenses required %}" +
+            "{{ license }}{% endfor %}{% endfor %}";
 
-        var result = CreateExpander(variables).Expand(content, "test.http");
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
 
-        result.Should().Be("[Acme:BASIC]");
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*test.http*unsupported option 'required'*'limit:', 'offset:' and 'reversed'*");
     }
 
     [Fact]
-    public void NotThrowWhenATopLevelLoopSourceHasARedundantRequiredModifier()
+    public void ResolveTeaPieVariablesUsedAsIndexerInAnInnerDynamicLoopSource()
     {
         var variables = new global::TeaPie.Variables.Variables();
-        variables.SetVariable("Companies", new object[] { new { Name = "Acme" } });
-        const string content = "{% for company in Companies | required %}{{ company.Name }}{% endfor %}";
+        variables.SetVariable("Companies", new object[]
+        {
+            new { Name = "Acme", Groups = new Dictionary<string, string[]> { ["basic"] = ["A", "B"] } }
+        });
+        variables.SetVariable("GroupKey", "basic");
+        const string content =
+            "{% for company in Companies %}{% for license in company.Groups[GroupKey] %}" +
+            "[{{ license }}]{% endfor %}{% endfor %}";
 
         var result = CreateExpander(variables).Expand(content, "test.http");
 
-        result.Should().Be("Acme");
-    }
-
-    [Fact]
-    public void NotThrowWhenATopLevelNumericRangeSourceHasARedundantRequiredModifier()
-    {
-        const string content = "{% for i in (1..3) | required %}{{ i }}{% endfor %}";
-
-        var result = CreateExpander().Expand(content, "test.http");
-
-        result.Should().Be("123");
+        result.Should().Be("[A][B]");
     }
 
     private static string FormatRequest(string name)
@@ -1439,6 +1423,561 @@ public class TemplateExpanderShould
 
         result.Should().Be("[EU/SK/Bratislava][EU/SK/Kosice]");
         variables.ContainsVariable("marker").Should().BeFalse();
+    }
+
+    private const string FourLevelContent =
+        "{% for region in Regions %}" +
+        "{% for country in region.Countries %}" +
+        "{% for city in country.Cities %}" +
+        "{% for street in city.Streets %}" +
+        "[{{ region.Name }}/{{ country.Name }}/{{ city.Name }}/{{ street }}]" +
+        "{% endfor %}" +
+        "{% endfor %}" +
+        "{% endfor %}" +
+        "{% endfor %}";
+
+    private static object[] CreateFourLevelRegions(string[] lastCityStreets)
+        =>
+        [
+            new
+            {
+                Name = "EU",
+                Countries = new object[]
+                {
+                    new { Name = "SK", Cities = new object[] { new { Name = "BA", Streets = new[] { "Main" } } } },
+                    new
+                    {
+                        Name = "CZ",
+                        Cities = new object[]
+                        {
+                            new { Name = "Praha", Streets = new[] { "Narodni" } },
+                            new { Name = "Brno", Streets = lastCityStreets }
+                        }
+                    }
+                }
+            }
+        ];
+
+    [Fact]
+    public void RenderFourLevelsOfNestedLoopsWithDynamicSources()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Regions", CreateFourLevelRegions(["Masarykova"]));
+
+        var result = CreateExpander(variables).Expand(FourLevelContent, "test.http");
+
+        result.Should().Be("[EU/SK/BA/Main][EU/CZ/Praha/Narodni][EU/CZ/Brno/Masarykova]");
+    }
+
+    [Fact]
+    public void LogTheFullOuterPathWhenASourceFourLevelsDeepIsEmpty()
+    {
+        var logger = new RecordingLogger<TemplateExpander>();
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Regions", CreateFourLevelRegions([]));
+
+        var result = CreateExpander(variables, logger: logger).Expand(FourLevelContent, "test.http");
+
+        result.Should().Be("[EU/SK/BA/Main][EU/CZ/Praha/Narodni]");
+        logger.Entries.Should().ContainSingle(entry =>
+            entry.Level == LogLevel.Debug
+            && entry.Message.Contains("'city.Streets'")
+            && entry.Message.Contains("region[0].country[1].city[1]"));
+    }
+
+    [Fact]
+    public void ThrowWithTheFullOuterPathWhenAThirdLevelDynamicSourceIsNotACollection()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Regions", new object[]
+        {
+            new
+            {
+                Name = "EU",
+                Countries = new object[]
+                {
+                    new { Name = "SK", Cities = new[] { "BA" } },
+                    new { Name = "CZ", Cities = "Praha" }
+                }
+            }
+        });
+        const string content =
+            "{% for region in Regions %}{% for country in region.Countries %}{% for city in country.Cities %}" +
+            "[{{ city }}]{% endfor %}{% endfor %}{% endfor %}";
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*variable 'country.Cities'*must be a collection*(region[0].country[1])*");
+    }
+
+    [Fact]
+    public void LogTheOuterPathOfAThirdLevelSourceThatReferencesAGrandparentLoopVariable()
+    {
+        var logger = new RecordingLogger<TemplateExpander>();
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[]
+        {
+            new { Name = "Acme", Users = new[] { "u1" }, Roles = new string[0] }
+        });
+        const string content =
+            "{% for company in Companies %}{% for user in company.Users %}" +
+            "{% for role in company.Roles %}[{{ user }}:{{ role }}]{% endfor %}" +
+            "{% endfor %}{% endfor %}";
+
+        CreateExpander(variables, logger: logger).Expand(content, "test.http");
+
+        logger.Entries.Should().Contain(entry =>
+            entry.Level == LogLevel.Debug
+            && entry.Message.Contains("'company.Roles'")
+            && entry.Message.Contains("company[0].user[0]"));
+    }
+
+    [Fact]
+    public void RenderOnlyTheOuterItemsWhoseDeepSourceIsNonEmpty()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Regions", new object[]
+        {
+            new
+            {
+                Name = "EU",
+                Countries = new object[]
+                {
+                    new { Name = "SK", Cities = new object[] { new { Name = "BA", Streets = new string[0] } } },
+                    new { Name = "CZ", Cities = new object[] { new { Name = "Brno", Streets = new[] { "Hlavni" } } } }
+                }
+            }
+        });
+        const string content =
+            "{% for region in Regions %}{% for country in region.Countries %}" +
+            "{% for city in country.Cities %}{% for street in city.Streets %}" +
+            "[{{ country.Name }}/{{ street }}]" +
+            "{% endfor %}{% endfor %}{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("[CZ/Hlavni]");
+    }
+
+    [Fact]
+    public void ResolveTeaPieVariablesUsedAsIndexerInAThirdLevelDynamicSource()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Regions", new object[]
+        {
+            new
+            {
+                Countries = new object[]
+                {
+                    new { Name = "SK", Groups = new Dictionary<string, string[]> { ["big"] = ["BA", "KE"] } }
+                }
+            }
+        });
+        variables.SetVariable("GroupKey", "big");
+        const string content =
+            "{% for region in Regions %}{% for country in region.Countries %}" +
+            "{% for city in country.Groups[GroupKey] %}[{{ country.Name }}/{{ city }}]" +
+            "{% endfor %}{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("[SK/BA][SK/KE]");
+    }
+
+    private static global::TeaPie.Variables.Variables CreateCompanyVariables()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[]
+        {
+            new
+            {
+                Name = "Acme",
+                Licenses = new[] { "A1", "A2", "A3" },
+                Groups = new Dictionary<string, string[]> { ["basic"] = ["AB"], ["none"] = [] }
+            },
+            new
+            {
+                Name = "Globex",
+                Licenses = new string[0],
+                Groups = new Dictionary<string, string[]> { ["basic"] = ["GB"], ["none"] = [] }
+            }
+        });
+        return variables;
+    }
+
+    private static List<(LogLevel Level, string Message)> ExpandAndCollectLogEntries(
+        string content, global::TeaPie.Variables.Variables variables)
+    {
+        var logger = new RecordingLogger<TemplateExpander>();
+        CreateExpander(variables, logger: logger).Expand(content, "requests/seed.http");
+        return logger.Entries;
+    }
+
+    [Fact]
+    public void ThrowAClearErrorForAFilterInAnInnerLoopSource()
+    {
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses | first %}" +
+            "{{ license }}{% endfor %}{% endfor %}";
+
+        var act = () => CreateExpander(CreateCompanyVariables()).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*test.http*filters are not supported*'company.Licenses | first'*");
+    }
+
+    [Fact]
+    public void ThrowForAMissingInnerSourceProperty()
+    {
+        const string content =
+            "{% for company in Companies %}{% for license in company.Nope %}{{ license }}{% endfor %}{% endfor %}";
+
+        var act = () => CreateExpander(CreateCompanyVariables()).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*test.http*'Nope' is undefined*");
+    }
+
+    [Fact]
+    public void RenderTheFluidElseBranchForAnEmptyInnerSource()
+    {
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses %}{{ license }}" +
+            "{% else %}[{{ company.Name }}:none]{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(CreateCompanyVariables()).Expand(content, "test.http");
+
+        result.Should().Be("A1A2A3[Globex:none]");
+    }
+
+    [Fact]
+    public void ApplyLimitOffsetAndReversedOnATopLevelLoop()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Items", new[] { 1, 2, 3, 4, 5 });
+        const string content = "{% for i in Items offset: 1 limit: 3 reversed %}{{ i }}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("432");
+    }
+
+    [Fact]
+    public void ApplyLimitOffsetAndReversedOnATopLevelNumericRange()
+    {
+        const string content = "{% for i in (1..5) limit: 2 reversed %}{{ i }}{% endfor %}";
+
+        var result = CreateExpander().Expand(content, "test.http");
+
+        result.Should().Be("21");
+    }
+
+    [Fact]
+    public void ApplyLimitAndReversedOnAnInnerDynamicLoop()
+    {
+        const string content =
+            "{% for company in Companies limit: 1 %}{% for license in company.Licenses limit: 2 reversed %}" +
+            "{{ license }}{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(CreateCompanyVariables()).Expand(content, "test.http");
+
+        result.Should().Be("A2A1");
+    }
+
+    [Fact]
+    public void ApplyAVariableLimitOnAnInnerDynamicLoop()
+    {
+        var variables = CreateCompanyVariables();
+        variables.SetVariable("MaxLicenses", 1);
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses limit: MaxLicenses %}" +
+            "{{ license }}{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("A1");
+    }
+
+    [Fact]
+    public void HonorALiteralLimitWhenCheckingTheTopLevelExpansionMaximum()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Items", Enumerable.Range(1, 10).ToList());
+        var limits = new TemplatingLimits { MaxExpandedRequests = 3 };
+        const string content = "{% for i in Items limit: 3 %}{{ i }}{% endfor %}";
+
+        var result = CreateExpander(variables, limits).Expand(content, "test.http");
+
+        result.Should().Be("123");
+    }
+
+    [Fact]
+    public void StillEnforceTheTopLevelExpansionMaximumWhenTheLimitIsTooLarge()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Items", Enumerable.Range(1, 10).ToList());
+        var limits = new TemplatingLimits { MaxExpandedRequests = 3 };
+        const string content = "{% for i in Items limit: 4 %}{{ i }}{% endfor %}";
+
+        var act = () => CreateExpander(variables, limits).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*loop over 'Items' would expand to 4 requests*");
+    }
+
+    [Theory]
+    [InlineData("reversed")]
+    [InlineData("offset: 1")]
+    public void ReportTheSourcePositionOfAReversedOrOffsetOuterItemInTheLogPath(string options)
+    {
+        var content =
+            $"{{% for company in Companies {options} %}}{{% for license in company.Licenses %}}" +
+            "{{ license }}{% endfor %}{% endfor %}";
+
+        var entries = ExpandAndCollectLogEntries(content, CreateCompanyVariables());
+
+        entries.Should().ContainSingle(entry => entry.Message.Contains("for company[1],"));
+    }
+
+    [Theory]
+    [InlineData("offset: 1 reversed")]
+    [InlineData("reversed offset: Skip")]
+    [InlineData("offset: 1 limit: 2 reversed")]
+    public void ReportTheSourcePositionOfAnOffsetAndReversedOuterItemInTheLogPath(string options)
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Skip", 1);
+        variables.SetVariable("Companies", new object[]
+        {
+            new { Licenses = new[] { "A1" } },
+            new { Licenses = new[] { "B1" } },
+            new { Licenses = new string[0] },
+            new { Licenses = new[] { "D1" } }
+        });
+        var content =
+            $"{{% for company in Companies {options} %}}{{% for license in company.Licenses %}}" +
+            "{{ license }}{% endfor %}{% endfor %}";
+
+        var entries = ExpandAndCollectLogEntries(content, variables);
+
+        entries.Should().ContainSingle(entry => entry.Message.Contains("for company[2],"));
+    }
+
+    [Fact]
+    public void RecognizeAnIndexerDirectlyOnTheLoopVariableAsADynamicSource()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[]
+        {
+            new Dictionary<string, object> { ["Licenses"] = new[] { "A1" } }
+        });
+        variables.SetVariable("Key", "Licenses");
+        const string content =
+            "{% for company in Companies %}{% for license in company[Key] %}{{ license }}{% endfor %}" +
+            "{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("A1");
+    }
+
+    [Fact]
+    public void RenderAnIndexerDirectlyOnTheLoopVariableInsideTheLoopBody()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[] { new Dictionary<string, object> { ["Name"] = "Acme" } });
+        variables.SetVariable("Key", "Name");
+        const string content = "{% for company in Companies %}[{{ company[Key] }}]{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be("[Acme]");
+    }
+
+    [Fact]
+    public void SeeATopLevelAssignUsedAsAnIndexerInsideAnInnerLoopSource()
+    {
+        const string content =
+            "{% assign group = 'basic' %}{% for company in Companies %}" +
+            "{% for license in company.Groups[group] %}{{ license }}{% endfor %}{% endfor %}";
+
+        var result = CreateExpander(CreateCompanyVariables()).Expand(content, "test.http");
+
+        result.Should().Be("ABGB");
+    }
+
+    [Fact]
+    public void SeeAnIndexerAssignedInsideTheOuterLoopBodyInAnInnerLoopSource()
+    {
+        const string content =
+            "{% for company in Companies %}{% assign group = 'none' %}" +
+            "{% for license in company.Groups[group] %}{{ license }}{% endfor %}{% endfor %}";
+
+        var entries = ExpandAndCollectLogEntries(content, CreateCompanyVariables());
+
+        entries.Should().Contain(entry =>
+            entry.Level == LogLevel.Debug && entry.Message.Contains("'company.Groups[group]'")
+            && entry.Message.Contains("for company[0],"));
+    }
+
+    [Fact]
+    public void KeepRejectingATopLevelAssignAsALoopSource()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Root", new { Children = new[] { "c1" } });
+        const string content =
+            "{% assign items = Root %}{% for item in items.Children %}{{ item }}{% endfor %}";
+
+        var act = () => CreateExpander(variables).Expand(content, "test.http");
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*collection variable 'items.Children'*was not found*");
+    }
+
+    [Fact]
+    public void PreserveWhitespaceControlOnAnInnerLoopThatGetsAGuard()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[] { new { Licenses = new[] { "A1", "A2" } } });
+        const string content =
+            "{% for company in Companies %}\n  {%- for license in company.Licenses -%}\n" +
+            "  [{{ license }}]\n  {%- endfor -%}\n{% endfor %}";
+        const string withoutGuard =
+            "{% for company in Companies %}\n  {%- for license in (\"A1\", \"A2\") -%}\n" +
+            "  [{{ license }}]\n  {%- endfor -%}\n{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, "test.http");
+
+        result.Should().Be(CreateExpander(variables).Expand(withoutGuard, "test.http"));
+    }
+
+    [Fact]
+    public void LogOnlyAtDebugLevelWhenAnInnerSourceIsEmptyForSomeOuterItems()
+    {
+        var logger = new RecordingLogger<TemplateExpander>();
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses %}{{ license }}{% endfor %}{% endfor %}";
+
+        CreateExpander(CreateCompanyVariables(), logger: logger).Expand(content, "requests/seed.http");
+
+        logger.Entries.Should().ContainSingle().Which.Should().Match<(LogLevel Level, string Message)>(entry =>
+            entry.Level == LogLevel.Debug
+            && entry.Message.Contains("'company.Licenses'")
+            && entry.Message.Contains("requests/seed.http")
+            && entry.Message.Contains("company[1]"));
+    }
+
+    [Fact]
+    public void WarnWhenAnInnerSourceIsEmptyForEveryOuterItem()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[]
+        {
+            new { Name = "New1", Customers = new string[0] },
+            new { Name = "New2", Customers = new string[0] }
+        });
+        const string content =
+            "{% for company in Companies %}{% for customer in company.Customers %}" +
+            "### Add customer\nPOST https://example.test/{{ customer }}\n{% endfor %}{% endfor %}";
+
+        var entries = ExpandAndCollectLogEntries(content, variables);
+
+        entries.Where(entry => entry.Level == LogLevel.Warning).Should().ContainSingle().Which.Message
+            .Should().Contain("'company.Customers'").And.Contain("requests/seed.http")
+            .And.Contain("every one of its 2 outer item(s)");
+        entries.Count(entry => entry.Level == LogLevel.Debug).Should().Be(2);
+    }
+
+    [Fact]
+    public void WarnAboutADeepSourceEmptyForEveryOuterItemAcrossAllNestingLevels()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Regions", new object[]
+        {
+            new { Countries = new object[] { new { Cities = new object[] { new { Streets = new string[0] } } } } }
+        });
+        const string content =
+            "{% for region in Regions %}{% for country in region.Countries %}{% for city in country.Cities %}" +
+            "{% for street in city.Streets %}{{ street }}{% endfor %}{% endfor %}{% endfor %}{% endfor %}";
+
+        var entries = ExpandAndCollectLogEntries(content, variables);
+
+        entries.Should().ContainSingle(entry =>
+            entry.Level == LogLevel.Warning && entry.Message.Contains("'city.Streets'"));
+    }
+
+    [Theory]
+    [InlineData("{% for i in Items offset: 10 %}### R{{ i }}\nPOST https://example.test/{{ i }}\n{% endfor %}")]
+    [InlineData("{% for i in Items limit: Zero %}### R{{ i }}\nPOST https://example.test/{{ i }}\n{% endfor %}")]
+    [InlineData("{% for i in Items %}{% if i > 99 %}### R{{ i }}\nPOST https://example.test/{{ i }}\n{% endif %}" +
+        "{% endfor %}")]
+    public void WarnWhenALoopWhoseBodyDeclaresRequestsGeneratesNone(string content)
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Items", new[] { 1, 2, 3 });
+        variables.SetVariable("Zero", 0);
+
+        var entries = ExpandAndCollectLogEntries(content, variables);
+
+        entries.Should().ContainSingle(entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains("'Items'")
+            && entry.Message.Contains("requests/seed.http")
+            && entry.Message.Contains("generated no requests"));
+    }
+
+    [Fact]
+    public void NotWarnAboutALoopInsideARequestBodyThatRendersNothing()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Items", new[] { 1, 2, 3 });
+        const string content =
+            "### Create\nPOST https://example.test/items\n\n[{% for i in Items limit: 0 %}{{ i }}{% endfor %}]\n";
+
+        var entries = ExpandAndCollectLogEntries(content, variables);
+
+        entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void WarnOnlyOnceWhenAnInnerSourceEmptyForEveryOuterItemLeavesTheWholeTreeWithoutRequests()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[] { new { Customers = new string[0] } });
+        const string content =
+            "{% for company in Companies %}{% for customer in company.Customers %}" +
+            "### Add\nPOST https://example.test/{{ customer }}\n{% endfor %}{% endfor %}";
+
+        var entries = ExpandAndCollectLogEntries(content, variables);
+
+        entries.Where(entry => entry.Level == LogLevel.Warning).Should().ContainSingle()
+            .Which.Message.Should().Contain("'company.Customers'");
+    }
+
+    [Fact]
+    public void NotLogAnythingWhenEveryInnerSourceIsNonEmpty()
+    {
+        var logger = new RecordingLogger<TemplateExpander>();
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("Companies", new object[] { new { Licenses = new[] { "A1" } } });
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses %}{{ license }}{% endfor %}{% endfor %}";
+
+        CreateExpander(variables, logger: logger).Expand(content, "test.http");
+
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void NotLeakInternalGuardVariablesIntoTeaPieVariables()
+    {
+        var variables = CreateCompanyVariables();
+        const string content =
+            "{% for company in Companies %}{% for license in company.Licenses %}{{ license }}{% endfor %}{% endfor %}";
+
+        CreateExpander(variables).Expand(content, "test.http");
+
+        variables.ContainsVariable("__teapie_loop_guard").Should().BeFalse();
+        variables.ContainsVariable("__teapie_loop_index_0").Should().BeFalse();
     }
 
     [Fact]

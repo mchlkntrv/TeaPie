@@ -1,8 +1,9 @@
 using System.Collections;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Fluid;
-using Fluid.Ast;
 using Fluid.Values;
+using Microsoft.Extensions.Logging;
 using TeaPie.Http.Parsing;
 using TeaPie.Variables;
 
@@ -14,9 +15,16 @@ internal sealed partial class TemplateExpander(
     ICollectionSourceResolver sourceResolver,
     IVariablesFluidModelBuilder modelBuilder,
     IVariables variables,
-    TemplatingLimits limits) : ITemplateExpander
+    TemplatingLimits limits,
+    ILogger<TemplateExpander> logger) : ITemplateExpander
 {
     private const string SourceAliasPrefix = "__teapie_loop_source_";
+    private const string LoopIndexPrefix = "__teapie_loop_index_";
+    private const string LoopLengthPrefix = "__teapie_loop_length_";
+    private const string LoopOffsetPrefix = "__teapie_loop_offset_";
+    private const string ContinueOffset = "continue";
+    private const string GuardTargetName = "__teapie_loop_guard";
+    private const string GuardFilterName = "__teapie_guard_loop_source";
     private const string TreeStartMarkerPrefix = "\u0000__teapie_loop_tree_start_";
     private const string TreeEndMarkerPrefix = "\u0000__teapie_loop_tree_end_";
     private const string MarkerSuffix = "__\u0000";
@@ -31,13 +39,15 @@ internal sealed partial class TemplateExpander(
         }
 
         var blocks = FindLoopBlocks(scanner, content, filePath);
+        var forSources = ParseForTagSources(blocks, filePath);
+        var isDynamic = Enumerable.Range(0, blocks.Count).Select(i => IsDynamicSource(i, blocks, forSources)).ToArray();
+
         var edits = new List<TextEdit>();
-        var sources = ResolveSourcesAndCollectAliasEdits(blocks, filePath, edits);
+        var sources = ResolveSourcesAndCollectSourceEdits(blocks, forSources, isDynamic, filePath, edits);
+        AddDynamicSourceGuardEdits(edits, content, blocks, forSources, isDynamic);
 
-        ValidateDynamicSources(blocks, sources, filePath);
-
-        var nestingRootIndices = FindNestingRootIndices(blocks);
-        AddNestingTreeMarkerEdits(edits, blocks, nestingRootIndices);
+        var topLevelIndices = FindTopLevelIndices(blocks);
+        AddTopLevelLoopMarkerEdits(edits, blocks, topLevelIndices);
 
         edits.AddRange(masker.FindMaskEdits(content, blocks));
         var topLevelNames = masker.FindTopLevelAssignTargetNames(content, blocks);
@@ -45,76 +55,134 @@ internal sealed partial class TemplateExpander(
         var transformed = TextEditApplier.Apply(content, edits, out var positionMap);
         var template = ParseTemplate(transformed, content, positionMap, filePath);
 
-        var (context, topLevelAssignments) = BuildRenderContext(blocks, sources, topLevelNames, filePath);
+        var usage = new DynamicSourceUsage[blocks.Count];
+        var (context, topLevelAssignments) =
+            BuildRenderContext(blocks, forSources, sources, usage, topLevelNames, filePath);
         var rendered = RenderTemplate(template, context, filePath);
+        var warnedIndices = WarnAboutDynamicSourcesEmptyForEveryOuterItem(forSources, usage, filePath);
 
-        ValidateNestedTreeRequestCounts(rendered, blocks, nestingRootIndices, filePath);
-        rendered = StripNestingTreeMarkers(rendered, nestingRootIndices);
+        ValidateTopLevelLoopRequestCounts(rendered, blocks, forSources, topLevelIndices, warnedIndices, filePath);
+        rendered = StripTopLevelLoopMarkers(rendered, topLevelIndices);
 
         PropagateTopLevelAssignments(topLevelAssignments);
 
         return rendered;
     }
 
-    private LoopSource?[] ResolveSourcesAndCollectAliasEdits(
-        IReadOnlyList<LoopBlock> blocks, string filePath, List<TextEdit> edits)
+    private static ForTagSource[] ParseForTagSources(IReadOnlyList<LoopBlock> blocks, string filePath)
+    {
+        try
+        {
+            return blocks.Select(block => ForTagSourceParser.Parse(block.SourceExpression)).ToArray();
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new InvalidOperationException(
+                $"Templating error in '{filePath}': {StripTemplatingErrorPrefix(ex.Message)}", ex);
+        }
+    }
+
+    private LoopSource?[] ResolveSourcesAndCollectSourceEdits(
+        IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources, bool[] isDynamic, string filePath,
+        List<TextEdit> edits)
     {
         var sources = new LoopSource?[blocks.Count];
 
         for (var i = 0; i < blocks.Count; i++)
         {
             var block = blocks[i];
-            var (effectiveExpression, isRequired) = SplitRequiredModifier(block.SourceExpression);
+            var forSource = forSources[i];
 
-            if (IsDynamicSource(i, blocks))
+            if (isDynamic[i])
             {
-                if (isRequired)
-                {
-                    edits.Add(new TextEdit(
-                        block.SourceExpressionStartIndex, block.SourceExpressionRawLength, effectiveExpression));
-                }
-
+                AddSourceEdit(edits, block, forSource.ToFluidSource(forSource.CollectionExpression));
                 continue;
             }
 
-            var source = ResolveSource(sourceResolver, effectiveExpression, filePath);
+            var source = ResolveSource(sourceResolver, forSource.CollectionExpression, filePath);
             sources[i] = source;
 
             if (source.ItemCount == 0)
             {
                 throw new InvalidOperationException(
-                    $"Templating error in '{filePath}': loop over '{effectiveExpression}' produced zero items.");
+                    $"Templating error in '{filePath}': loop over '{forSource.CollectionExpression}' produced " +
+                    "zero items.");
             }
 
-            if (LoopBlockHierarchy.IsStandaloneBlock(i, blocks) && source.ItemCount > limits.MaxExpandedRequests)
+            var expandedCount = forSource.ApplyLiteralWindow(source.ItemCount);
+            if (LoopBlockHierarchy.IsStandaloneBlock(i, blocks) && expandedCount > limits.MaxExpandedRequests)
             {
                 throw new InvalidOperationException(
-                    $"Templating error in '{filePath}': loop over '{block.SourceExpression}' would expand to " +
-                    $"{source.ItemCount} requests, exceeding the maximum of {limits.MaxExpandedRequests}.");
+                    $"Templating error in '{filePath}': loop over '{forSource.CollectionExpression}' would expand " +
+                    $"to {expandedCount} requests, exceeding the maximum of {limits.MaxExpandedRequests}.");
             }
 
-            if (source.Collection is not null)
-            {
-                edits.Add(new TextEdit(
-                    block.SourceExpressionStartIndex, block.SourceExpressionRawLength, $"{SourceAliasPrefix}{i}"));
-            }
-            else if (isRequired)
-            {
-                edits.Add(new TextEdit(
-                    block.SourceExpressionStartIndex, block.SourceExpressionRawLength, effectiveExpression));
-            }
+            var collection = source.Collection is not null ? $"{SourceAliasPrefix}{i}" : forSource.CollectionExpression;
+            AddSourceEdit(edits, block, forSource.ToFluidSource(collection));
         }
 
         return sources;
     }
 
-    private static List<int> FindNestingRootIndices(IReadOnlyList<LoopBlock> blocks)
-        => Enumerable.Range(0, blocks.Count).Where(i => LoopBlockHierarchy.IsNestingRoot(i, blocks)).ToList();
-
-    private static void AddNestingTreeMarkerEdits(
-        List<TextEdit> edits, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<int> nestingRootIndices)
+    private static void AddSourceEdit(List<TextEdit> edits, LoopBlock block, string fluidSource)
     {
-        foreach (var rootIndex in nestingRootIndices)
+        if (!string.Equals(fluidSource, block.SourceExpression, StringComparison.Ordinal))
+        {
+            edits.Add(new TextEdit(block.SourceExpressionStartIndex, block.SourceExpressionRawLength, fluidSource));
+        }
+    }
+
+    private static void AddDynamicSourceGuardEdits(
+        List<TextEdit> edits, string content, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources,
+        bool[] isDynamic)
+    {
+        var ancestorsByBlock = Enumerable.Range(0, blocks.Count)
+            .Select(i => LoopBlockHierarchy.GetAncestorIndices(i, blocks))
+            .ToArray();
+
+        for (var i = 0; i < blocks.Count; i++)
+        {
+            var leadsToDynamicSource = isDynamic[i]
+                || Enumerable.Range(0, blocks.Count).Any(d => isDynamic[d] && ancestorsByBlock[d].Contains(i));
+
+            if (ancestorsByBlock[i].Count == 0 || !leadsToDynamicSource)
+            {
+                continue;
+            }
+
+            var block = blocks[i];
+            var parentIndex = ancestorsByBlock[i][0];
+            var parent = forSources[parentIndex];
+            var trimMarker = content[block.StartIndex + 2] == '-' ? "-" : string.Empty;
+            var injected = $"{{%{trimMarker} assign {LoopIndexPrefix}{parentIndex} = forloop.index0 %}}";
+
+            if (parent.IsReversed)
+            {
+                injected += $"{{% assign {LoopLengthPrefix}{parentIndex} = forloop.length %}}";
+            }
+
+            if (parent.IsReversed && HasEvaluableOffset(parent))
+            {
+                injected += $"{{% assign {LoopOffsetPrefix}{parentIndex} = {parent.OffsetExpression} %}}";
+            }
+
+            if (isDynamic[i])
+            {
+                injected += $"{{% assign {GuardTargetName} = {forSources[i].CollectionExpression} | " +
+                    $"{GuardFilterName}: {i} %}}";
+            }
+
+            edits.Add(new TextEdit(block.StartIndex, 0, injected));
+        }
+    }
+
+    private static List<int> FindTopLevelIndices(IReadOnlyList<LoopBlock> blocks)
+        => Enumerable.Range(0, blocks.Count).Where(i => LoopBlockHierarchy.IsTopLevel(i, blocks)).ToList();
+
+    private static void AddTopLevelLoopMarkerEdits(
+        List<TextEdit> edits, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<int> topLevelIndices)
+    {
+        foreach (var rootIndex in topLevelIndices)
         {
             var block = blocks[rootIndex];
             edits.Add(new TextEdit(block.StartIndex, 0, $"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}"));
@@ -139,10 +207,13 @@ internal sealed partial class TemplateExpander(
     }
 
     private (TemplateContext Context, Dictionary<string, FluidValue> TopLevelAssignments) BuildRenderContext(
-        IReadOnlyList<LoopBlock> blocks, LoopSource?[] sources, IReadOnlySet<string> topLevelNames, string filePath)
+        IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources, LoopSource?[] sources,
+        DynamicSourceUsage[] usage, IReadOnlySet<string> topLevelNames, string filePath)
     {
         var options = CreateMemberAccessOptions(filePath);
         options.MaxSteps = limits.MaxRenderSteps;
+        options.Filters.AddFilter(GuardFilterName, (input, arguments, context) =>
+            GuardDynamicSource(input, arguments, context, blocks, forSources, usage, filePath, logger));
 
         var model = new Dictionary<string, object?>(modelBuilder.Build(variables));
         for (var i = 0; i < blocks.Count; i++)
@@ -169,6 +240,105 @@ internal sealed partial class TemplateExpander(
         return (context, topLevelAssignments);
     }
 
+    private static ValueTask<FluidValue> GuardDynamicSource(
+        FluidValue input, FilterArguments arguments, TemplateContext context, IReadOnlyList<LoopBlock> blocks,
+        IReadOnlyList<ForTagSource> forSources, DynamicSourceUsage[] usage, string filePath, ILogger logger)
+    {
+        var blockIndex = (int)arguments.At(0).ToNumberValue();
+        var forSource = forSources[blockIndex];
+        var raw = input.ToObjectValue();
+
+        if (raw is not IEnumerable enumerable || raw is string)
+        {
+            var outerItemPath = FormatOuterItemPath(blockIndex, blocks, forSources, context);
+            throw new InvalidOperationException(
+                $"Templating error in '{filePath}': variable '{forSource.CollectionExpression}' referenced in a " +
+                $"'{{% for %}}' loop must be a collection ({outerItemPath}).");
+        }
+
+        usage[blockIndex].Evaluated++;
+
+        if (enumerable.Cast<object?>().Any())
+        {
+            usage[blockIndex].NonEmpty++;
+            return new ValueTask<FluidValue>(NilValue.Instance);
+        }
+
+        if (logger.IsEnabled(LogLevel.Debug))
+        {
+            logger.LogDebug(
+                "Loop over '{Source}' in '{Path}' produced zero items for {OuterItem}, so it generated no requests " +
+                "there.",
+                forSource.CollectionExpression,
+                filePath,
+                FormatOuterItemPath(blockIndex, blocks, forSources, context));
+        }
+
+        return new ValueTask<FluidValue>(NilValue.Instance);
+    }
+
+    private HashSet<int> WarnAboutDynamicSourcesEmptyForEveryOuterItem(
+        IReadOnlyList<ForTagSource> forSources, DynamicSourceUsage[] usage, string filePath)
+    {
+        var warnedIndices = new HashSet<int>();
+
+        for (var i = 0; i < usage.Length; i++)
+        {
+            if (usage[i].Evaluated > 0 && usage[i].NonEmpty == 0)
+            {
+                warnedIndices.Add(i);
+                logger.LogWarning(
+                    "Loop over '{Source}' in '{Path}' produced zero items for every one of its {Count} outer " +
+                    "item(s), so it generated no requests at all. Check that the collection is filled as expected.",
+                    forSources[i].CollectionExpression,
+                    filePath,
+                    usage[i].Evaluated);
+            }
+        }
+
+        return warnedIndices;
+    }
+
+    private struct DynamicSourceUsage
+    {
+        public int Evaluated;
+        public int NonEmpty;
+    }
+
+    private static string FormatOuterItemPath(
+        int blockIndex, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources,
+        TemplateContext context)
+    {
+        var ancestors = LoopBlockHierarchy.GetAncestorIndices(blockIndex, blocks);
+        ancestors.Reverse();
+
+        return string.Join('.', ancestors.Select(ancestorIndex =>
+        {
+            var position = ResolveSourcePosition(ancestorIndex, forSources[ancestorIndex], context);
+            return $"{blocks[ancestorIndex].LoopVariableName}[{position.ToString(CultureInfo.InvariantCulture)}]";
+        }));
+    }
+
+    private static decimal ResolveSourcePosition(int blockIndex, ForTagSource forSource, TemplateContext context)
+    {
+        var index = context.GetValue($"{LoopIndexPrefix}{blockIndex}").ToNumberValue();
+
+        if (!forSource.IsReversed)
+        {
+            return index;
+        }
+
+        var length = context.GetValue($"{LoopLengthPrefix}{blockIndex}").ToNumberValue();
+        var offset = HasEvaluableOffset(forSource)
+            ? context.GetValue($"{LoopOffsetPrefix}{blockIndex}").ToNumberValue()
+            : 0;
+
+        return length - 1 - index + offset;
+    }
+
+    private static bool HasEvaluableOffset(ForTagSource forSource)
+        => forSource.OffsetExpression is { } offset && offset != ContinueOffset;
+
     private string RenderTemplate(IFluidTemplate template, TemplateContext context, string filePath)
     {
         try
@@ -185,10 +355,11 @@ internal sealed partial class TemplateExpander(
         }
     }
 
-    private void ValidateNestedTreeRequestCounts(
-        string rendered, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<int> nestingRootIndices, string filePath)
+    private void ValidateTopLevelLoopRequestCounts(
+        string rendered, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources,
+        IReadOnlyList<int> topLevelIndices, IReadOnlySet<int> warnedIndices, string filePath)
     {
-        foreach (var rootIndex in nestingRootIndices)
+        foreach (var rootIndex in topLevelIndices)
         {
             var startMarker = $"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}";
             var endMarker = $"{TreeEndMarkerPrefix}{rootIndex}{MarkerSuffix}";
@@ -205,19 +376,32 @@ internal sealed partial class TemplateExpander(
             var requestCount = RequestSeparatorRegex().Split(segment)
                 .Count(fragment => RequestMethodAndUriLineRegex().IsMatch(fragment));
 
-            if (requestCount > limits.MaxExpandedRequests)
+            if (requestCount > limits.MaxExpandedRequests && LoopBlockHierarchy.IsNestingRoot(rootIndex, blocks))
             {
                 throw new InvalidOperationException(
                     $"Templating error in '{filePath}': the nested loop tree would expand to {requestCount} " +
                     "requests combined across all nesting levels, exceeding the maximum of " +
-                    $"{limits.MaxExpandedRequests} (root loop over '{blocks[rootIndex].SourceExpression}').");
+                    $"{limits.MaxExpandedRequests} (root loop over '{forSources[rootIndex].CollectionExpression}').");
+            }
+
+            if (requestCount == 0 && DeclaresRequests(blocks[rootIndex])
+                && !warnedIndices.Any(index => LoopBlockHierarchy.GetAncestorIndices(index, blocks).Contains(rootIndex)))
+            {
+                logger.LogWarning(
+                    "Loop over '{Source}' in '{Path}' generated no requests, although its body declares some " +
+                    "(for example because 'limit:'/'offset:' or an '{{% if %}}' excluded every item). Check the " +
+                    "loop's collection, options and conditions.",
+                    forSources[rootIndex].CollectionExpression,
+                    filePath);
             }
         }
     }
 
-    private static string StripNestingTreeMarkers(string rendered, IReadOnlyList<int> nestingRootIndices)
+    private static bool DeclaresRequests(LoopBlock block) => RequestMethodAndUriLineRegex().IsMatch(block.Body);
+
+    private static string StripTopLevelLoopMarkers(string rendered, IReadOnlyList<int> topLevelIndices)
     {
-        foreach (var rootIndex in nestingRootIndices)
+        foreach (var rootIndex in topLevelIndices)
         {
             rendered = rendered
                 .Replace($"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}", string.Empty, StringComparison.Ordinal)
@@ -248,103 +432,6 @@ internal sealed partial class TemplateExpander(
         }
     }
 
-    private static void ValidateDynamicSources(IReadOnlyList<LoopBlock> blocks, LoopSource?[] sources, string filePath)
-    {
-        var childIndicesByParent = new Dictionary<int, List<int>>();
-        for (var i = 0; i < blocks.Count; i++)
-        {
-            if (LoopBlockHierarchy.IsTopLevel(i, blocks))
-            {
-                continue;
-            }
-
-            var parentIndex = LoopBlockHierarchy.GetAncestorIndices(i, blocks)[0];
-            (childIndicesByParent.TryGetValue(parentIndex, out var siblings)
-                ? siblings
-                : childIndicesByParent[parentIndex] = []).Add(i);
-        }
-
-        for (var i = 0; i < blocks.Count; i++)
-        {
-            if (LoopBlockHierarchy.IsTopLevel(i, blocks) && sources[i]?.Collection is { } rootCollection)
-            {
-                WalkDynamicDescendants(
-                    i, rootCollection, new Dictionary<string, object?>(), string.Empty, blocks, sources,
-                    childIndicesByParent, filePath);
-            }
-        }
-    }
-
-    private static void WalkDynamicDescendants(
-        int parentIndex, IEnumerable parentCollection, IReadOnlyDictionary<string, object?> boundAncestors,
-        string pathPrefix, IReadOnlyList<LoopBlock> blocks, LoopSource?[] sources,
-        Dictionary<int, List<int>> childIndicesByParent, string filePath)
-    {
-        if (!childIndicesByParent.TryGetValue(parentIndex, out var childIndices))
-        {
-            return;
-        }
-
-        var parentBlock = blocks[parentIndex];
-        var index = 0;
-
-        foreach (var item in parentCollection)
-        {
-            var bound = new Dictionary<string, object?>(boundAncestors) { [parentBlock.LoopVariableName] = item };
-            var path = $"{pathPrefix}{parentBlock.LoopVariableName}[{index}]";
-
-            foreach (var childIndex in childIndices)
-            {
-                var childBlock = blocks[childIndex];
-
-                var childCollection = sources[childIndex]?.Collection
-                    ?? EvaluateAndGuardDynamicSource(childBlock, bound, path, filePath);
-
-                WalkDynamicDescendants(
-                    childIndex, childCollection, bound, $"{path}.", blocks, sources, childIndicesByParent, filePath);
-            }
-
-            index++;
-        }
-    }
-
-    private static IEnumerable EvaluateAndGuardDynamicSource(
-        LoopBlock block, IReadOnlyDictionary<string, object?> boundAncestors, string path, string filePath)
-    {
-        var (effectiveExpression, isRequired) = SplitRequiredModifier(block.SourceExpression);
-
-        if (!Parser.TryParse($"{{{{ {effectiveExpression} }}}}", out var probe, out var parseError) ||
-            ((IStatementList)probe).Statements is not [OutputStatement { Expression: var expression }])
-        {
-            throw new InvalidOperationException(
-                $"Templating error in '{filePath}': failed to parse loop source '{effectiveExpression}': " +
-                $"{parseError}.");
-        }
-
-        var options = CreateMemberAccessOptions(filePath);
-        var context = new TemplateContext(new Dictionary<string, object?>(boundAncestors), options);
-        var value = expression.EvaluateAsync(context).GetAwaiter().GetResult();
-        var raw = value.ToObjectValue();
-
-        if (raw is not IEnumerable enumerable || raw is string)
-        {
-            throw new InvalidOperationException(
-                $"Templating error in '{filePath}': variable '{effectiveExpression}' referenced in a " +
-                $"'{{% for %}}' loop must be a collection ({path}).");
-        }
-
-        var materialized = enumerable.Cast<object?>().ToList();
-
-        if (isRequired && materialized.Count == 0)
-        {
-            throw new InvalidOperationException(
-                $"Templating error in '{filePath}': loop over '{effectiveExpression}' produced zero items " +
-                $"({path}).");
-        }
-
-        return materialized;
-    }
-
     private static TemplateOptions CreateMemberAccessOptions(string filePath)
         => new()
         {
@@ -352,17 +439,6 @@ internal sealed partial class TemplateExpander(
             Undefined = name => throw new InvalidOperationException(
                 $"Templating error in '{filePath}': '{name}' is undefined.")
         };
-
-    private static (string Expression, bool IsRequired) SplitRequiredModifier(string sourceExpression)
-    {
-        var match = RequiredModifierRegex().Match(sourceExpression);
-        return match.Success
-            ? (match.Groups["expr"].Value.TrimEnd(), true)
-            : (sourceExpression, false);
-    }
-
-    [GeneratedRegex(@"^(?<expr>.+?)\s*\|\s*required\s*$")]
-    private static partial Regex RequiredModifierRegex();
 
     private static LoopSource ResolveSource(ICollectionSourceResolver sourceResolver, string sourceExpression, string filePath)
     {
@@ -386,13 +462,11 @@ internal sealed partial class TemplateExpander(
     private static bool IsRenderStepLimitExceeded(InvalidOperationException ex)
         => ex.Message.Contains(FluidMessageFormats.RenderStepLimitMarker, StringComparison.OrdinalIgnoreCase);
 
-    private static bool IsDynamicSource(int blockIndex, IReadOnlyList<LoopBlock> blocks)
-    {
-        var block = blocks[blockIndex];
-
-        return LoopBlockHierarchy.GetAncestorIndices(blockIndex, blocks).Exists(ancestorIndex =>
-            FluidExpressionIdentifier.StartsWithIdentifier(block.SourceExpression, blocks[ancestorIndex].LoopVariableName));
-    }
+    private static bool IsDynamicSource(
+        int blockIndex, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources)
+        => LoopBlockHierarchy.GetAncestorIndices(blockIndex, blocks).Exists(ancestorIndex =>
+            FluidExpressionIdentifier.StartsWithIdentifier(
+                forSources[blockIndex].CollectionExpression, blocks[ancestorIndex].LoopVariableName));
 
     [GeneratedRegex(HttpFileParserConstants.HttpRequestSeparatorDirectiveLineRegex)]
     private static partial Regex RequestSeparatorRegex();

@@ -29,6 +29,10 @@ Property access is `{{ item.PropertyName }}` and is **case-sensitive**. Dotted v
 
 **3. A numeric range:** `{% for i in (1..5) %}` — inclusive on both ends (5 iterations).
 
+**Loop options** follow the collection, space-separated, in any order: `limit: n`, `offset: n`, `reversed` (standard Liquid; `n` may be a number or a variable) — e.g. `{% for p in Partners offset: 1 limit: 10 reversed %}`. A loop source does **not** accept filters (`{% for x in Items | sort %}` is an error).
+
+**Top-level sources** must be a TeaPie variable name, an inline list or a range — not a member path (`Root.Children`), an indexer or an `{% assign %}` variable.
+
 ## The `forloop` Object
 
 | Field | Meaning |
@@ -79,22 +83,15 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Loop would expand to more than **1000** requests | Error |
 | Rendering needs more than **200 000** Fluid evaluation steps (too many `{{ }}`/`{% %}` expressions across items) | Error — separate from, and on top of, the 1000-request cap |
 | Missing `{% endfor %}`, a stray `{% endfor %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag |
+| A filter in a loop source, or an unknown/duplicated loop option | Error listing the supported loop options |
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
 | Two or more requests share the same `# @name` after expansion | Warning, not an error |
+| An inner loop's collection is empty for **every** outer item (it generated no requests at all) | Warning, not an error |
+| A loop whose body declares requests generated none (`offset:` past the end, `limit: 0`, an `{% if %}` excluding every item) | Warning, not an error |
 
 All of the above errors include the request file's path.
 
-\* For an **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` above), TeaPie evaluates that source once per outer iteration instead of once up front. Missing/non-collection is still an unconditional error there (naming which outer item, e.g. `company[1]`), same as a top-level source — but an **empty** per-iteration collection is silent by default (a company with no customers is often valid, not a mistake). Mark the loop `| required` to make an empty per-iteration collection an error too:
-
-```http
-{% for company in Companies %}
-{% for license in company.Licenses | required %}
-...
-{% endfor %}
-{% endfor %}
-```
-
-`| required` only affects the empty-collection check; it's a no-op on a top-level source (already unconditional there).
+\* For an **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses`, `company[key]`), TeaPie checks that source during rendering, each time the inner loop is about to run, in the same scope the loop sees (TeaPie variables, `{% assign %}` values, enclosing loop variables). Missing/`null`/non-collection is still an unconditional error there (naming which outer item by its source position, e.g. `region[0].country[1]`), same as a top-level source — but an **empty** per-iteration collection is not an error (a company with no customers is often valid, not a mistake): that outer item just produces no requests from the inner loop (or renders its `{% else %}` branch). It is never silent, though — each empty outer item gets a **Debug** log message naming it (e.g. `company[1]`), and if the collection is empty for **every** outer item, so the inner loop generated no requests at all, a **Warning** (visible by default) names the loop and the file. If a file must not run with such data, assert it in the `-init.csx`/`-test.csx` script instead.
 
 ## Current Limitations
 

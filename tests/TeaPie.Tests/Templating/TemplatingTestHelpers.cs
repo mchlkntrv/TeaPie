@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using TeaPie.Templating;
 
 namespace TeaPie.Tests.Templating;
@@ -7,7 +9,8 @@ namespace TeaPie.Tests.Templating;
 internal static partial class TemplatingTestHelpers
 {
     public static TemplateExpander CreateExpander(
-        global::TeaPie.Variables.IVariables? variables = null, TemplatingLimits? limits = null)
+        global::TeaPie.Variables.IVariables? variables = null, TemplatingLimits? limits = null,
+        ILogger<TemplateExpander>? logger = null)
     {
         var vars = variables ?? new global::TeaPie.Variables.Variables();
         return new TemplateExpander(
@@ -16,7 +19,8 @@ internal static partial class TemplatingTestHelpers
             new CollectionSourceResolver(vars),
             new VariablesFluidModelBuilder(),
             vars,
-            limits ?? new TemplatingLimits());
+            limits ?? new TemplatingLimits(),
+            logger ?? NullLogger<TemplateExpander>.Instance);
     }
 
     public static (int Line, int Column) ExtractReportedPosition(string message)
@@ -47,4 +51,17 @@ internal static partial class TemplatingTestHelpers
 
     [GeneratedRegex(@"at \((?<line>\d+):(?<column>\d+)\)")]
     private static partial Regex PositionRegex();
+}
+
+internal sealed class RecordingLogger<T> : ILogger<T>
+{
+    public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(
+        LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        => Entries.Add((logLevel, formatter(state, exception)));
 }
