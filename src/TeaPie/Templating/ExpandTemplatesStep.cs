@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 using TeaPie.Pipelines;
 using TeaPie.TestCases;
 
@@ -21,8 +22,38 @@ internal sealed class ExpandTemplatesStep(
         LogExpansionResult(context, testCaseExecutionContext, content.Length, expandedContent.Length);
         LogExpandedContent(context, testCaseExecutionContext, expandedContent);
 
+        if (context.DumpExpandedContent && content.Contains("{%", StringComparison.Ordinal))
+        {
+            DumpExpandedContent(context, testCaseExecutionContext.TestCase.RequestsFile.RelativePath, expandedContent);
+        }
+
         await Task.CompletedTask;
     }
+
+    private static void DumpExpandedContent(ApplicationContext context, string relativePath, string expandedContent)
+    {
+        if (string.IsNullOrEmpty(context.ExpandedContentDumpPath))
+        {
+            AnsiConsole.Write(new Rule($"[grey]Expanded: {relativePath.EscapeMarkup()}[/]").LeftJustified());
+            AnsiConsole.Write(new Text(expandedContent));
+            AnsiConsole.WriteLine();
+            return;
+        }
+
+        var dumpFilePath = Path.Combine(context.ExpandedContentDumpPath, ToRequestFilePath(relativePath));
+        Directory.CreateDirectory(Path.GetDirectoryName(dumpFilePath)!);
+        System.IO.File.WriteAllText(dumpFilePath, expandedContent);
+
+        context.Logger.LogInformation(
+            "Expanded content of the requests file at '{Path}' was written to '{DumpFilePath}'.",
+            relativePath,
+            dumpFilePath);
+    }
+
+    private static string ToRequestFilePath(string relativePath)
+        => Path.GetExtension(relativePath).Equals(Constants.RequestFileExtension, StringComparison.OrdinalIgnoreCase)
+            ? relativePath
+            : relativePath + Constants.RequestFileExtension;
 
     private static void LogExpansionResult(
         ApplicationContext context, TestCaseExecutionContext testCaseExecutionContext, int originalLength, int expandedLength)

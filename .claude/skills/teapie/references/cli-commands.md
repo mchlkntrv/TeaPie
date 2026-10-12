@@ -11,7 +11,7 @@ Complete reference for all TeaPie CLI commands.
 **Full Syntax:**
 
 ```sh
-teapie test [path] [--temp-path <path>] [-e|--env <envName>] [--env-file <file>] [-r|--report-file <file>] [-i|--init-script <script>] [--no-cache-vars] [--log-file <file>] [--log-file-log-level <level>] [--requests-log-file <file>] [-l|--log-level <level>] [-d|--debug] [-v|--verbose] [-q|--quiet] [--no-logo]
+teapie test [path] [--temp-path <path>] [-e|--env <envName>] [--env-file <file>] [-r|--report-file <file>] [-i|--init-script <script>] [--no-cache-vars] [--dump-expanded [<directory>]] [--log-file <file>] [--log-file-log-level <level>] [--requests-log-file <file>] [-l|--log-level <level>] [-d|--debug] [-v|--verbose] [-q|--quiet] [--no-logo]
 ```
 
 **Arguments:**
@@ -26,6 +26,7 @@ teapie test [path] [--temp-path <path>] [-e|--env <envName>] [--env-file <file>]
 - `-r`, `--report-file` - Path for JUnit XML report file.
 - `-i`, `--init-script`, `--initialization-script` - Custom initialization script. Auto-detects `init.csx` if not provided.
 - `--no-cache-vars`, `--no-cache-variables` - Disable variable caching.
+- `--dump-expanded [<directory>]` - Output each templated requests file after template expansion: to the console, or into `<directory>` (keeping relative paths).
 - `--log-file` - Path to log file.
 - `--log-file-log-level` - Log level for file (Trace, Debug, Information, Warning, Error, Critical, None). Default: Information.
 - `--requests-log-file` - Path for HTTP requests JSON log file.

@@ -294,7 +294,16 @@ The emptiness is checked against the source collection, before any `limit:`/`off
 
 ## Inspecting the Expanded Content
 
-The expanded requests file only ever exists in memory, so instead of writing it to disk, TeaPie logs it:
+The expanded requests file only ever exists in memory. To see exactly what is about to run, use the `--dump-expanded` option of `teapie test`:
+
+```bash
+teapie test --dump-expanded              # print each expanded file to the console
+teapie test --dump-expanded ./expanded   # write each expanded file into ./expanded, keeping its relative path
+```
+
+Only files that contain templates are dumped, after their `-init.csx` script has run, so the output matches what is actually executed. The requests are still sent as usual — the dump is a by-product of a normal run (expansion depends on variables set by scripts and earlier requests, so it can't be produced without running them). A `.tp` file is written with an extra `.http` extension (e.g. `seed.tp.http`), since only its request part is expanded.
+
+The expansion is also logged:
 
 - **Debug level** — logs the content length before and after expansion (e.g. `120 -> 340`), so you can tell at a glance whether a loop actually expanded anything.
 - **Trace level** — logs the **entire** expanded `.http` content for the file, exactly as it is about to be split into individual requests.

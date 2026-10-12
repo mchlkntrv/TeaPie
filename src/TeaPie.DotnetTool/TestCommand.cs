@@ -24,6 +24,8 @@ internal sealed class TestCommand : ApplicationCommandBase<TestCommand.Settings>
             .WithReportFile(PathResolver.Resolve(settings.ReportFilePath, string.Empty))
             .WithInitializationScript(PathResolver.Resolve(settings.InitializationScriptPath, string.Empty))
             .WithVariablesCaching(!settings.NoVariablesCaching)
+            .WithExpandedContentDump(
+                settings.DumpExpanded?.IsSet == true, PathResolver.Resolve(settings.DumpExpanded?.Value, string.Empty))
             .WithDefaultPipeline();
 
         return appBuilder;
@@ -65,5 +67,11 @@ internal sealed class TestCommand : ApplicationCommandBase<TestCommand.Settings>
         [DefaultValue(false)]
         [Description("Disables loading variables from file and caching them to file.")]
         public bool NoVariablesCaching { get; init; }
+
+        [CommandOption("--dump-expanded [DIRECTORY]")]
+        [Description("Outputs the content of each templated requests file after its templates are expanded. " +
+            "Without a value, the content is written to the console; with a directory, each file is written there, " +
+            "keeping its relative path.")]
+        public FlagValue<string>? DumpExpanded { get; init; }
     }
 }
