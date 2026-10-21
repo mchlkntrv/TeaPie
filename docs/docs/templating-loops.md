@@ -14,7 +14,9 @@ Loop expansion runs **after** the pre-request (`-init.csx`) script and **before*
 
 - Any variable set in `-init.csx` via `tp.SetVariable(...)` is already available as a loop source.
 - Each resulting request behaves exactly like a normal request: it gets its own name, directives (`## TEST-...`, `## AUTH-PROVIDER`, retry directives), and its own entry in the test report.
-- Files that don't contain any Fluid tag (`{%` anywhere in the content) are left completely unchanged — templating has zero effect on ordinary request files. This fast path is keyed on `{%` in general, not on `{% for %}` specifically: a file using only `{% if %}`/`{% assign %}` with no loop at all is still parsed and rendered by Fluid (see [Conditions and Assignments](#conditions-and-assignments)).
+- A file is treated as a template only if it contains at least one supported tag: `{% for %}`, `{% if %}`, `{% unless %}`, `{% assign %}` or `{% raw %}` (whitespace control such as `{%-` is allowed). A file using only `{% if %}`/`{% assign %}` with no loop at all is still parsed and rendered by Fluid (see [Conditions and Assignments](#conditions-and-assignments)).
+- Any other file is left completely unchanged, so templating has no effect on ordinary request files. That includes a file whose body happens to contain `{%` text, such as a strftime format (`"{%Y-%m-%d}"`) or a Jinja payload. TeaPie logs a warning for such a file, in case a tag name was misspelled (tag names are case-sensitive).
+- In a file that **is** a template, every `{%` is read as Fluid syntax. Wrap literal `{%` text in `{% raw %}...{% endraw %}`, for example `{"fmt": "{% raw %}{%Y-%m-%d}{% endraw %}"}`. Otherwise the file fails to parse. The same rule applies to `#` and `//` comment lines, because `# @name` lines must be templated too. A commented-out loop such as `# {% for i in (1..2) %}` therefore still runs.
 
 ## Collection Sources
 
@@ -257,7 +259,8 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | A filter in a loop source (e.g. `{% for x in Items \| sort %}`), an unknown or duplicated loop option | Error naming the source and listing the supported [loop options](#loop-options) |
 | Loop would expand to more than **1000** requests | Error, to prevent runaway expansion |
 | A numeric range bound (e.g. `(1..99999999999)`) is too large to fit a 32-bit integer | Error naming the offending bound, instead of a raw overflow failure* |
-| Missing `{% endfor %}`, a stray `{% endfor %}` with no matching `{% for %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag |
+| Missing `{% endfor %}`, a stray `{% endfor %}` with no matching `{% for %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag (a file whose only tag is a stray `{% endfor %}` is not a template, so it gets the warning below instead) |
+| A file contains `{%` but no supported tag (see [How It Fits the Pipeline](#how-it-fits-the-pipeline)) | Warning (not an error); the file is sent unchanged |
 | Nested `{% for %}` loops | Supported — see [Multiple Loops in One File](#multiple-loops-in-one-file); a nesting-root loop's combined request count (across all its nesting levels) is what counts against the 1000-request limit above |
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
 | Rendering the file requires more than **200 000** Fluid evaluation steps (e.g. many `{{ }}`/`{% %}` expressions repeated across items) | Error suggesting the file be checked for repeated expressions or split into smaller loops — this is separate from, and on top of, the 1000-request cap |

@@ -19,10 +19,15 @@ internal sealed class ExpandTemplatesStep(
         var expandedContent = templateExpander.Expand(content, testCaseExecutionContext.TestCase.RequestsFile.RelativePath);
         testCaseExecutionContext.RequestsFileContent = expandedContent;
 
-        LogExpansionResult(context, testCaseExecutionContext, content.Length, expandedContent.Length);
+        if (!TemplateDetector.ContainsTemplateTag(content))
+        {
+            return;
+        }
+
+        LogExpansionResult(context, testCaseExecutionContext, content, expandedContent);
         LogExpandedContent(context, testCaseExecutionContext, expandedContent);
 
-        if (context.DumpExpandedContent && content.Contains("{%", StringComparison.Ordinal))
+        if (context.DumpExpandedContent)
         {
             DumpExpandedContent(context, testCaseExecutionContext.TestCase.RequestsFile.RelativePath, expandedContent);
         }
@@ -56,14 +61,17 @@ internal sealed class ExpandTemplatesStep(
             : relativePath + Constants.RequestFileExtension;
 
     private static void LogExpansionResult(
-        ApplicationContext context, TestCaseExecutionContext testCaseExecutionContext, int originalLength, int expandedLength)
+        ApplicationContext context, TestCaseExecutionContext testCaseExecutionContext, string originalContent,
+        string expandedContent)
         => context.Logger.LogDebug(
             "Templates within the requests file at '{Path}' were expanded (content length {OriginalLength} -> " +
             "{ExpandedLength}, {Change}).",
             testCaseExecutionContext.TestCase.RequestsFile.RelativePath,
-            originalLength,
-            expandedLength,
-            originalLength == expandedLength ? "unchanged" : "template(s) expanded");
+            originalContent.Length,
+            expandedContent.Length,
+            string.Equals(originalContent, expandedContent, StringComparison.Ordinal)
+                ? "unchanged"
+                : "template(s) expanded");
 
     private static void LogExpandedContent(
         ApplicationContext context, TestCaseExecutionContext testCaseExecutionContext, string expandedContent)

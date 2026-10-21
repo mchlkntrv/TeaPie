@@ -33,8 +33,9 @@ internal sealed partial class TemplateExpander(
 
     public string Expand(string content, string filePath)
     {
-        if (!content.Contains("{%", StringComparison.Ordinal))
+        if (!TemplateDetector.ContainsTemplateTag(content))
         {
+            WarnAboutUnsupportedTagDelimiter(content, filePath);
             return content;
         }
 
@@ -67,6 +68,18 @@ internal sealed partial class TemplateExpander(
         PropagateTopLevelAssignments(topLevelAssignments);
 
         return rendered;
+    }
+
+    private void WarnAboutUnsupportedTagDelimiter(string content, string filePath)
+    {
+        if (TemplateDetector.ContainsTagDelimiter(content))
+        {
+            logger.LogWarning(
+                "Requests file at '{Path}' contains '{{%' but no supported template tag ({Tags}), so it is sent " +
+                "unchanged. If it was meant to be a template, check the spelling of its tags.",
+                filePath,
+                TemplateDetector.SupportedTagNames);
+        }
     }
 
     private static ForTagSource[] ParseForTagSources(IReadOnlyList<LoopBlock> blocks, string filePath)

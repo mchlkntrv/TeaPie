@@ -6,7 +6,7 @@ Expand a single request block in a `.http`/`.tp` file into many independent requ
 
 **Where:** `.http` request files and `.tp` files (in their `--- HTTP` section)
 
-Loop expansion runs **after** the pre-request (`-init.csx`) script and **before** requests are split into individual test steps, so a variable set via `tp.SetVariable(...)` is already available as a loop source. Each resulting request behaves exactly like a normal request: its own name, its own directives, its own report entry. Files with no Fluid tag (`{%`) anywhere are left completely unchanged — but a file using only `{% if %}`/`{% assign %}` with no `{% for %}` at all is still parsed and rendered (see [Conditions and assignments](#conditions-and-assignments) below).
+Loop expansion runs **after** the pre-request (`-init.csx`) script and **before** requests are split into individual test steps, so a variable set via `tp.SetVariable(...)` is already available as a loop source. Each resulting request behaves exactly like a normal request: its own name, its own directives, its own report entry. Only a file that contains a supported tag (`{% for %}`, `{% if %}`, `{% unless %}`, `{% assign %}` or `{% raw %}`) is templated. A file using only `{% if %}`/`{% assign %}` with no `{% for %}` is still parsed and rendered (see [Conditions and assignments](#conditions-and-assignments) below). Any other file is left completely unchanged, even if it contains `{%` text (e.g. a `"{%Y-%m-%d}"` body); TeaPie logs a warning for it in case a tag is misspelled. In a templated file, every `{%`, including on `#` comment lines, is Fluid syntax: wrap literal `{%` text in `{% raw %}...{% endraw %}`. A commented-out loop still runs.
 
 ## Collection Sources
 

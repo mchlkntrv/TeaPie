@@ -24,7 +24,36 @@ public class TemplateExpanderShould
         var result = CreateExpander().Expand(content, FilePath);
 
         result.Should().BeSameAs(content);
+        ExpandAndCollectLogEntries(content).Should().BeEmpty();
     }
+
+    [Theory]
+    [InlineData("POST https://example.test\n\n{\"fmt\":\"{%Y-%m-%d}\"}")]
+    [InlineData("{\"template\": \"Hello {% name %}!\"}")]
+    [InlineData("{% comment %}note{% endcomment %}")]
+    [InlineData("before\n{% endfor %}\nafter")]
+    [InlineData("{% For x in Xs %}{{ x }}{% endFor %}")]
+    [InlineData("{% format %}{% iffy %}{% assigned %}{% raw_x %}")]
+    public void ReturnContentWithoutASupportedTagUnchangedAndWarnAboutIt(string content)
+    {
+        var logger = new RecordingLogger<TemplateExpander>();
+
+        var result = CreateExpander(CreateVariables(), logger: logger).Expand(content, FilePath);
+
+        result.Should().BeSameAs(content);
+        logger.Entries.Should().ContainSingle().Which.Should().Match<(LogLevel Level, string Message)>(entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains(FilePath)
+            && entry.Message.Contains("sent unchanged"));
+    }
+
+    [Theory]
+    [InlineData("{% raw %}{%Y-%m-%d}{% endraw %}", "{%Y-%m-%d}")]
+    [InlineData("{%- if true -%}YES{%- endif -%}", "YES")]
+    [InlineData("{%unless false%}YES{%endunless%}", "YES")]
+    [InlineData("{% assign x = 1 %}{{ x }}", "1")]
+    public void TreatEachSupportedTagAsATemplate(string content, string expected)
+        => Expand(content).Should().Be(expected);
 
     [Theory]
     [InlineData("{% if true %}YES{% else %}NO{% endif %}", "YES")]
@@ -172,7 +201,8 @@ public class TemplateExpanderShould
     [InlineData("{% for i in (1..1) %}{{Temp.Id_{{ forloop.index }}}}{% endfor %}", "*failed to parse*")]
     [InlineData("{% for i in (1..1) %}{% raw %}{{ i }}{% endfor %}", "*failed to parse*raw*")]
     [InlineData("{% for t in Tenants %}{% if t.Name %}X{% endfor %}", "*failed to parse template*")]
-    [InlineData("{\"template\": \"Hello {% name %}!\"}", "*wrap it in*raw*")]
+    [InlineData("{% if true %}x{% endif %}{\"template\": \"Hello {% name %}!\"}", "*wrap it in*raw*")]
+    [InlineData("{% assign d = 1 %}{\"fmt\":\"{%Y-%m-%d}\"}", "*wrap it in*raw*")]
     public void ThrowAClearErrorForInvalidTemplatesOrData(string content, string expectedMessage)
     {
         var act = () => Expand(content);
