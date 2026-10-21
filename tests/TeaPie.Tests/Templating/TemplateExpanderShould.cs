@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using static TeaPie.Tests.Templating.TemplatingTestHelpers;
 using TeaPie.Templating;

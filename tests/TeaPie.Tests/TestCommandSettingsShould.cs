@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using Spectre.Console.Cli;
 using Spectre.Console.Testing;
 using TeaPie.DotnetTool;

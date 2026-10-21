@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Fluid;
 using FluentAssertions;
 using TeaPie.Templating;

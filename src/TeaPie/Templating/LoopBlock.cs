@@ -1,4 +1,4 @@
-namespace TeaPie.Templating;
+﻿namespace TeaPie.Templating;
 
 internal sealed record LoopBlock(
     string LoopVariableName,

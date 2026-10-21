@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using TeaPie.Templating;
 
 namespace TeaPie.Tests.Templating;
