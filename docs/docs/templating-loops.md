@@ -244,7 +244,8 @@ A few things worth knowing:
 - A condition on an **undefined** name (a typo, or a TeaPie variable that was never set) is falsy rather than an error — this is standard Fluid behavior, not a TeaPie-specific guard.
 - Variables tagged as `secret` are not visible to templates. In a condition or an `{% assign %}` they behave like an undefined name, even when a lower-priority scope has a non-secret variable with the same name. They also cannot be used as a loop source (see [Guards and Error Handling](#guards-and-error-handling)).
 - A dotted TeaPie variable name (e.g. `Temp.FreePartners`) used directly in a condition is evaluated as a single undefined identifier, not resolved as a nested member access — wrap it as `{{ Temp.FreePartners }}` inside the condition if you need its actual value.
-- `{% assign %}` used at the loop-body level is scoped to that iteration; `{% assign %}` used at the top level of the file (outside any loop) sets a real TeaPie variable, visible to the rest of the file and to later requests, exactly like `tp.SetVariable(...)` would.
+- `{% assign %}` is local to the file being expanded. It never sets or overrides a TeaPie variable, so scripts, other test cases and the variables cache never see it. To share a value beyond the file, set it with `tp.SetVariable(...)` in the `-init.csx` script.
+- Within the file, `{% assign %}` follows standard Liquid semantics. A value assigned in a loop body is still set in the following iterations. If the same name was also assigned at the top level before the loop, it keeps the last value after the loop. A `{{ name }}` expression is rendered from an assignment only when that name is assigned at the top level before it, or in the same or an enclosing loop.
 
 ## Guards and Error Handling
 

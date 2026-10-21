@@ -52,18 +52,6 @@ public class LoopBodyMaskerShould
     public void WrapTokensOutsideAnyLoopOrAssignScopeInARawBlock(string content, string expected)
         => ApplyMask(content).Should().Be(expected.Replace("<{{", "{% raw %}{{").Replace("}}>", "}}{% endraw %}"));
 
-    [Fact]
-    public void FindTopLevelAssignTargetNamesButNotInLoopOnes()
-    {
-        const string content =
-            "{% assign topLevel = \"x\" %}{% for item in Items %}{% assign inLoop = item.Name %}{% endfor %}";
-        var blocks = new LoopBlockScanner().FindLoopBlocks(content);
-
-        var names = new LoopBodyMasker().FindTopLevelAssignTargetNames(content, blocks);
-
-        names.Should().BeEquivalentTo(["topLevel"]);
-    }
-
     private static string ApplyMask(string content)
     {
         var blocks = new LoopBlockScanner().FindLoopBlocks(content);

@@ -32,22 +32,6 @@ internal sealed partial class LoopBodyMasker : ILoopBodyMasker
         return edits;
     }
 
-    public IReadOnlySet<string> FindTopLevelAssignTargetNames(string content, IReadOnlyList<LoopBlock> blocks)
-    {
-        var rawRanges = RawBlockRegex().Matches(content);
-        var names = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var occurrence in FindAssignOccurrences(content, blocks, rawRanges))
-        {
-            if (occurrence.EnclosingBlockIndex is null)
-            {
-                names.Add(occurrence.Name);
-            }
-        }
-
-        return names;
-    }
-
     private static List<AssignOccurrence> FindAssignOccurrences(
         string content, IReadOnlyList<LoopBlock> blocks, MatchCollection rawRanges)
     {

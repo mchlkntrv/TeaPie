@@ -263,14 +263,16 @@ public class TemplateExpanderShould
     }
 
     [Fact]
-    public void PersistTopLevelAssignsAsTeaPieVariables()
+    public void KeepTopLevelAssignsLocalToTheFile()
     {
         var variables = CreateVariables();
 
-        CreateExpander(variables).Expand("{% assign Label = 'free' %}{% assign Count = 5 %}", FilePath);
+        var result = CreateExpander(variables)
+            .Expand("{% assign Label = 'free' %}{% assign Greeting = 'Overridden' %}{{ Label }} {{ Greeting }}", FilePath);
 
-        variables.GetVariable<string>("Label").Should().Be("free");
-        variables.GetVariable<decimal>("Count").Should().Be(5m);
+        result.Should().Be("free Overridden");
+        variables.ContainsVariable("Label").Should().BeFalse();
+        variables.GetVariable<string>("Greeting").Should().Be("Hi");
     }
 
     [Fact]
@@ -278,8 +280,8 @@ public class TemplateExpanderShould
     {
         var variables = CreateVariables();
         const string content =
-            "{% for c in Companies %}{% assign outer = 1 %}{% for l in c.Licenses %}{% assign inner = 1 %}" +
-            "{% endfor %}{% endfor %}";
+            "{% assign outer = 0 %}{% for c in Companies %}{% assign outer = 1 %}{% for l in c.Licenses %}" +
+            "{% assign inner = 1 %}{% endfor %}{% endfor %}";
 
         CreateExpander(variables).Expand(content, FilePath);
 

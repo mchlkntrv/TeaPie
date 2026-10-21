@@ -51,23 +51,18 @@ internal sealed partial class TemplateExpander(
         AddTopLevelLoopMarkerEdits(edits, blocks, topLevelIndices);
 
         edits.AddRange(masker.FindMaskEdits(content, blocks));
-        var topLevelNames = masker.FindTopLevelAssignTargetNames(content, blocks);
 
         var transformed = TextEditApplier.Apply(content, edits, out var positionMap);
         var template = ParseTemplate(transformed, content, positionMap, filePath);
 
         var usage = new DynamicSourceUsage[blocks.Count];
-        var (context, topLevelAssignments) =
-            BuildRenderContext(blocks, forSources, sources, usage, topLevelNames, filePath);
+        var context = BuildRenderContext(blocks, forSources, sources, usage, filePath);
         var rendered = RenderTemplate(template, context, filePath);
         var warnedIndices = WarnAboutDynamicSourcesEmptyForEveryOuterItem(forSources, usage, filePath);
 
         ValidateTopLevelLoopRequestCounts(rendered, blocks, forSources, topLevelIndices, warnedIndices, filePath);
-        rendered = StripTopLevelLoopMarkers(rendered, topLevelIndices);
 
-        PropagateTopLevelAssignments(topLevelAssignments);
-
-        return rendered;
+        return StripTopLevelLoopMarkers(rendered, topLevelIndices);
     }
 
     private void WarnAboutUnsupportedTagDelimiter(string content, string filePath)
@@ -219,9 +214,9 @@ internal sealed partial class TemplateExpander(
         return template;
     }
 
-    private (TemplateContext Context, Dictionary<string, FluidValue> TopLevelAssignments) BuildRenderContext(
+    private TemplateContext BuildRenderContext(
         IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources, LoopSource?[] sources,
-        DynamicSourceUsage[] usage, IReadOnlySet<string> topLevelNames, string filePath)
+        DynamicSourceUsage[] usage, string filePath)
     {
         var options = CreateMemberAccessOptions(filePath);
         options.MaxSteps = limits.MaxRenderSteps;
@@ -237,20 +232,7 @@ internal sealed partial class TemplateExpander(
             }
         }
 
-        var context = new TemplateContext(model, options);
-
-        var topLevelAssignments = new Dictionary<string, FluidValue>(StringComparer.Ordinal);
-        context.Assigned = (identifier, value, _) =>
-        {
-            if (topLevelNames.Contains(identifier))
-            {
-                topLevelAssignments[identifier] = value;
-            }
-
-            return new ValueTask<FluidValue>(value);
-        };
-
-        return (context, topLevelAssignments);
+        return new TemplateContext(model, options);
     }
 
     private static ValueTask<FluidValue> GuardDynamicSource(
@@ -422,14 +404,6 @@ internal sealed partial class TemplateExpander(
         }
 
         return rendered;
-    }
-
-    private void PropagateTopLevelAssignments(Dictionary<string, FluidValue> topLevelAssignments)
-    {
-        foreach (var (name, value) in topLevelAssignments)
-        {
-            variables.SetVariable(name, value.ToObjectValue());
-        }
     }
 
     private static IReadOnlyList<LoopBlock> FindLoopBlocks(ILoopBlockScanner scanner, string content, string filePath)

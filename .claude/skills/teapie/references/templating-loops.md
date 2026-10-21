@@ -70,7 +70,7 @@ All requests produced by a nesting-root loop (outer loop + everything nested ins
 
 ## Conditions and assignments
 
-Inside a loop body — or at the top level with no loop at all — `{% if %}`/`{% elsif %}`/`{% else %}`/`{% unless %}` and `{% assign %}` are also supported, with plain Fluid semantics. An undefined name in a condition is falsy, not an error. A dotted TeaPie variable name (e.g. `Temp.FreePartners`) used directly in a condition is read as member access on `Temp` (undefined), not as the bridged variable — wrap it as `{{ Temp.FreePartners }}` if you need its value. A top-level `{% assign %}` (outside any loop) sets a real TeaPie variable, same as `tp.SetVariable(...)`; a loop-body `{% assign %}` stays local to that iteration.
+Inside a loop body — or at the top level with no loop at all — `{% if %}`/`{% elsif %}`/`{% else %}`/`{% unless %}` and `{% assign %}` are also supported, with plain Fluid semantics. An undefined name in a condition is falsy, not an error. A dotted TeaPie variable name (e.g. `Temp.FreePartners`) used directly in a condition is read as member access on `Temp` (undefined), not as the bridged variable — wrap it as `{{ Temp.FreePartners }}` if you need its value. `{% assign %}` is local to the file: it never sets or overrides a TeaPie variable (use `tp.SetVariable(...)` in `-init.csx` to share a value). Inside the file it follows Liquid semantics: a loop-body assignment persists into later iterations, and after the loop for a name also assigned at the top level before it.
 
 ## Guards and Error Handling
 
