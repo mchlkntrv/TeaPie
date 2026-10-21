@@ -327,11 +327,14 @@ See [Logging](logging.md) for all available logging levels and options.
 
 ## Reporting
 
-Each request produced by a loop is reported exactly like any other request — there is no separate "loop" concept in the JUnit report. Verified manually with a 3-item loop (`{% for partner in Partners %}`, each iteration named `CreatePartner{{ forloop.index }}` and asserting `## TEST-EXPECT-STATUS: [201]`), plus a post-response script asserting on each iteration's own response via `tp.Responses["CreatePartner1"]`, `tp.Responses["CreatePartner2"]`, etc.:
+Each request produced by a loop is reported exactly like any other request; there is no separate "loop" concept in the JUnit report. The example below is the report for a test case `Create-Partners-req.http` with:
+
+- a 3-item loop (`{% for partner in Partners %}`), each iteration named `CreatePartner{{ forloop.index }}` and asserting `## TEST-EXPECT-STATUS: [201]`;
+- a post-response script that checks each iteration's own response through `tp.Responses["CreatePartner1"]`, `tp.Responses["CreatePartner2"]`, and so on.
 
 ```xml
-<testsuites name="001-Loop-Over-Partners" tests="5" skipped="0" failures="0" time="0.054" timestamp="...">
-  <testsuite name="001-loop-over-partners" tests="5" skipped="0" failures="0" time="0.054">
+<testsuites name="Create-Partners" tests="5" skipped="0" failures="0" time="0.054" timestamp="...">
+  <testsuite name="create-partners" tests="5" skipped="0" failures="0" time="0.054">
     <testcase name="[1] Status code should match one of these: [201]" ... />
     <testcase name="[2] Status code should match one of these: [201]" ... />
     <testcase name="[3] Status code should match one of these: [201]" ... />

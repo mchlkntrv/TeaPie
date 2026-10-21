@@ -103,4 +103,4 @@ All of the above errors include the request file's path.
 
 To see what a templated file expands to, run `teapie test --dump-expanded` (prints each expanded file to the console) or `teapie test --dump-expanded-dir <directory>` (writes them there, keeping relative paths; the directory must be outside the tested collection). Requests are still sent — the dump is a by-product of a normal run.
 
-For logging/inspection details (Debug/Trace-level expansion logging) and a full JUnit reporting example, see the project's `docs/docs/templating-loops.md` documentation page.
+For logging/inspection details (Debug/Trace-level expansion logging) and a full JUnit reporting example, see the [Templating Loops documentation](https://www.teapie.fun/docs/templating-loops.html).
