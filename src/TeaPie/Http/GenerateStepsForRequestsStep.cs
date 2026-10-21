@@ -20,7 +20,11 @@ internal partial class GenerateStepsForRequestsStep(ITestCaseExecutionContextAcc
             .Where(IsRequest)
             .ToList();
 
-        LogDuplicateRequestNames(context, testCaseExecutionContext, separatedRequests);
+        if (testCaseExecutionContext.AllowsDuplicateRequestNames)
+        {
+            LogDuplicateRequestNames(context, testCaseExecutionContext, separatedRequests);
+        }
+
         AddStepsForRequests(context, testCaseExecutionContext, separatedRequests);
 
         await Task.CompletedTask;

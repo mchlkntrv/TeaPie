@@ -50,12 +50,43 @@ public class GenerateStepsForRequestsStepShould
         var (_, _, insertedSteps, logger) = await ExpandAndGenerateSteps(name);
 
         insertedSteps.Should().HaveCount(6);
-        logger.ReceivedCalls().Count(call => call.GetArguments()[0] is LogLevel.Warning)
-            .Should().Be(expectWarning ? 1 : 0);
+        CountDuplicateNameWarnings(logger).Should().Be(expectWarning ? 1 : 0);
     }
 
-    private static async Task<(TestCaseExecutionContext Context, ApplicationContext AppContext,
+    [Fact]
+    public async Task KeepRejectingDuplicateNamesInAFileWithoutTemplates()
+    {
+        const string content =
+            "### First\n# @name Same\nPOST https://example.com/partners\n\n" +
+            "### Second\n# @name Same\nPOST https://example.com/partners\n";
+
+        var (context, appContext, insertedSteps, logger) = await ExpandAndGenerateStepsForContent(content);
+
+        CountDuplicateNameWarnings(logger).Should().Be(0);
+        context.AllowsDuplicateRequestNames.Should().BeFalse();
+        await insertedSteps[0].Execute(appContext);
+        var registerSecond = () => insertedSteps[3].Execute(appContext);
+        await registerSecond.Should().ThrowAsync<ArgumentException>();
+    }
+
+    private static int CountDuplicateNameWarnings(ILogger<ApplicationContext> logger)
+        => logger.ReceivedCalls().Count(call =>
+            call.GetArguments()[0] is LogLevel.Warning
+            && call.GetArguments()[2]?.ToString()?.Contains("requests named 'CreatePartner'") == true);
+
+    private static Task<(TestCaseExecutionContext Context, ApplicationContext AppContext,
         IPipelineStep[] InsertedSteps, ILogger<ApplicationContext> Logger)> ExpandAndGenerateSteps(string requestName)
+        => ExpandAndGenerateStepsForContent(
+            "{% for partner in Temp.Partners %}### Create partner\n" +
+            $"# @name {requestName}\n" +
+            "POST https://example.com/partners\n" +
+            "Content-Type: application/json\n\n" +
+            "{ \"registrationId\": \"{{ partner.RegistrationId }}\" }\n" +
+            "{% endfor %}");
+
+    private static async Task<(TestCaseExecutionContext Context, ApplicationContext AppContext,
+        IPipelineStep[] InsertedSteps, ILogger<ApplicationContext> Logger)> ExpandAndGenerateStepsForContent(
+        string content)
     {
         var services = new ServiceCollection();
         var logger = Substitute.For<ILogger<ApplicationContext>>();
@@ -70,13 +101,7 @@ public class GenerateStepsForRequestsStepShould
         });
 
         var context = RequestHelper.PrepareTestCaseContext(RequestsIndex.RequestWithFullStructure, false);
-        context.RequestsFileContent =
-            "{% for partner in Temp.Partners %}### Create partner\n" +
-            $"# @name {requestName}\n" +
-            "POST https://example.com/partners\n" +
-            "Content-Type: application/json\n\n" +
-            "{ \"registrationId\": \"{{ partner.RegistrationId }}\" }\n" +
-            "{% endfor %}";
+        context.RequestsFileContent = content;
         var accessor = new TestCaseExecutionContextAccessor { Context = context };
         var appContext = new ApplicationContextBuilder()
             .WithServiceProvider(serviceProvider)

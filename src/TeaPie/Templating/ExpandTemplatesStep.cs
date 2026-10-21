@@ -24,6 +24,8 @@ internal sealed class ExpandTemplatesStep(
             return;
         }
 
+        testCaseExecutionContext.AllowsDuplicateRequestNames = true;
+
         LogExpansionResult(context, testCaseExecutionContext, content, expandedContent);
         LogExpandedContent(context, testCaseExecutionContext, expandedContent);
 

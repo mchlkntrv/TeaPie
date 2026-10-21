@@ -86,7 +86,7 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Missing `{% endfor %}`, a stray `{% endfor %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag |
 | A filter in a loop source, or an unknown/duplicated loop option | Error listing the supported loop options |
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
-| Two or more requests share the same `# @name` after expansion | Warning, not an error |
+| Two or more requests in a templated file share the same `# @name` after expansion | Warning, not an error (last one wins); in a file without templates it stays an error |
 | An inner loop's collection is empty for **every** outer item (it generated no requests at all) | Warning, not an error |
 | A loop whose body declares requests generated none (`offset:` past the end, `limit: 0`, an `{% if %}` excluding every item) | Warning, not an error |
 
