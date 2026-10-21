@@ -46,7 +46,7 @@ Usable anywhere in the loop body, including inside `# @name` declarations — ex
 
 ## Naming Requests Inside a Loop
 
-Always include `{{ forloop.index }}` (or another per-iteration value) in `# @name`, otherwise every iteration shares one name — the last-registered request wins and TeaPie logs a warning (not a failure). Because names differ per iteration, a later request referencing an iteration's response needs `forloop.index` combined with the `prepend`/`append` filters, e.g. `{{ forloop.index | prepend: "Temp.Attachments.CompanyId_" }}`, to build the variable reference dynamically.
+Always include `{{ forloop.index }}` (or another per-iteration value) in `# @name`, otherwise every iteration shares one name — the last-registered request wins and TeaPie logs a warning (not a failure). In nested loops, combine the outer and inner index (see the example below). Names of requests outside loops must also be unique and must not match any name a loop generates: in a templated file such a collision is only a warning, so it can go unnoticed. Because names differ per iteration, a later request referencing an iteration's response needs `forloop.index` combined with the `prepend`/`append` filters, e.g. `{{ forloop.index | prepend: "Temp.Attachments.CompanyId_" }}`, to build the variable reference dynamically.
 
 ## Nested Loops
 
