@@ -131,7 +131,7 @@ Content-Type: application/json
 
 **`forloop`:** `forloop.index` (1-based), `forloop.index0` (0-based), `forloop.first`, `forloop.last`.
 
-**Key rules:** always put `{{ forloop.index }}` in `# @name` so iterations don't collide; loops can be nested (capture an outer `forloop.index` via `{% assign x = forloop.index %}` before the inner loop, since the inner loop's `forloop` shadows the outer one); expansion is capped at 1000 requests per nesting-root loop; a missing/empty/non-collection source is a hard error (except for an inner loop's dynamic source, which silently yields zero requests for that outer item).
+**Key rules:** always put `{{ forloop.index }}` in `# @name` so iterations don't collide; loops can be nested (capture an outer `forloop.index` via `{% assign x = forloop.index %}` before the inner loop, since the inner loop's `forloop` shadows the outer one); expansion is capped at 1000 requests per nesting-root loop; a missing, `null` or non-collection source (a string included) is always a hard error, for inner loops as well; an empty source is a hard error for a top-level loop. An inner loop whose source references an outer loop's variable (e.g. `company.Licenses`) may be empty for some outer items. Each such item gets a **Debug** log message, and a **Warning** is logged when the source is empty for every outer item.
 
 See [Templating Loops Reference](references/templating-loops.md) for full syntax, guards, and the nested-loop example.
 
