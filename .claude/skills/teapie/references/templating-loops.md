@@ -79,6 +79,7 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Situation | Result |
 | --- | --- |
 | Collection variable does not exist / isn't a collection / resolves to zero items | Error — naming the file and the problem* |
+| Loop source is a variable tagged `secret` | Error — secret variables are never visible to templates (in conditions/`assign` they act as undefined)* |
 | A numeric range bound (e.g. `(1..99999999999)`) is too large for a 32-bit integer | Error naming the offending bound, instead of a raw overflow failure* |
 | Loop would expand to more than **1000** requests | Error |
 | Rendering needs more than **200 000** Fluid evaluation steps (too many `{{ }}`/`{% %}` expressions across items) | Error — separate from, and on top of, the 1000-request cap |

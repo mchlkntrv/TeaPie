@@ -33,6 +33,7 @@ public class TemplateExpanderShould
     [InlineData("{% unless SkipSeed %}SEED{% endunless %}", "SEED")]
     [InlineData("{% if PartnerCount > 5 %}BIG{% else %}SMALL{% endif %}", "BIG")]
     [InlineData("{% if NoSuchVariable %}YES{% else %}NO{% endif %}", "NO")]
+    [InlineData("{% assign leaked = SecretIds %}[{{ leaked }}]{% if SecretIds %}YES{% endif %}", "[]")]
     [InlineData("{% assign big = false %}{% if PartnerCount > 5 %}{% assign big = true %}{% endif %}" +
         "{% if big %}BIG{% endif %}", "BIG")]
     [InlineData("{% assign label = 'seeded' %}{% for t in Tenants %}{{ label }}-{{ t.Name }};{% endfor %}",
@@ -151,6 +152,9 @@ public class TemplateExpanderShould
     [InlineData("{% for p in PartnerCount %}{{ p }}{% endfor %}",
         "*requests/seed.http*variable 'PartnerCount'*must be a collection*")]
     [InlineData("{% for s in (\"a\",) %}{{ s }}{% endfor %}", "*requests/seed.http*inline collection*empty item*")]
+    [InlineData("{% for s in SecretIds %}{{ s }}{% endfor %}", "*requests/seed.http*'SecretIds'*tagged as 'secret'*")]
+    [InlineData("{% for i in (1..1) %}{% for s in SecretIds %}{{ s }}{% endfor %}{% endfor %}",
+        "*'SecretIds'*tagged as 'secret'*")]
     [InlineData("{% assign items = Root %}{% for item in items.Children %}{{ item }}{% endfor %}",
         "*collection variable 'items.Children'*was not found*")]
     [InlineData("{% for c in BadCompanies %}{% for l in c.Licenses %}{{ l }}{% endfor %}{% endfor %}",
@@ -409,6 +413,7 @@ public class TemplateExpanderShould
         });
         variables.SetVariable("SmallOuters", CreateOuters(10, 10));
         variables.SetVariable("BigOuters", CreateOuters(50, 30));
+        variables.SetVariable("SecretIds", new[] { "S3CR3T" }, Constants.SecretVariableTag);
         variables.SetVariable("Greeting", "Hi");
         variables.SetVariable("PartnerCount", 10);
         variables.SetVariable("MaxLicenses", 1);

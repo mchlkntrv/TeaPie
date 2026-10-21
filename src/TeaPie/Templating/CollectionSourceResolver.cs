@@ -53,6 +53,14 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
                 $"Templating error: collection variable '{sourceExpression}' referenced in a '{{% for %}}' loop was not found.");
         }
 
+        if (IsSecret(sourceExpression))
+        {
+            throw new InvalidOperationException(
+                $"Templating error: variable '{sourceExpression}' is tagged as '{Constants.SecretVariableTag}' and " +
+                "cannot be used as a '{% for %}' loop source, because its values would appear in the expanded " +
+                "requests file and in logs.");
+        }
+
         var value = variables.GetVariable<object?>(sourceExpression);
         if (value is not IEnumerable enumerable)
         {
@@ -63,6 +71,20 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
         var materialized = enumerable.Cast<object?>().ToList();
         return new LoopSource(materialized, materialized.Count);
     }
+
+    private bool IsSecret(string name)
+        => GetScopesInDescendingPriorityOrder()
+            .FirstOrDefault(scope => scope?.Contains(name) == true)?
+            .First(variable => variable.Name.Equals(name, StringComparison.Ordinal))
+            .HasTag(Constants.SecretVariableTag) == true;
+
+    private IEnumerable<VariablesCollection?> GetScopesInDescendingPriorityOrder() =>
+    [
+        variables.TestCaseVariables,
+        variables.CollectionVariables,
+        variables.EnvironmentVariables,
+        variables.GlobalVariables
+    ];
 
     private static LoopSource ResolveInlineLiteralList(string inner)
     {

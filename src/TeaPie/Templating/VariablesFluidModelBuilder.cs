@@ -19,6 +19,7 @@ internal sealed class VariablesFluidModelBuilder : IVariablesFluidModelBuilder
             {
                 if (variable.HasTag(Constants.SecretVariableTag))
                 {
+                    model.Remove(variable.Name);
                     continue;
                 }
 

@@ -41,6 +41,18 @@ public class VariablesFluidModelBuilderShould
     }
 
     [Fact]
+    public void NotExposeALowerPriorityValueShadowedByASecret()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.GlobalVariables.Set("Shadow", "PUBLIC");
+        variables.TestCaseVariables.Set("Shadow", "HIDDEN", Constants.SecretVariableTag);
+
+        var result = new VariablesFluidModelBuilder().Build(variables);
+
+        result.Should().NotContainKey("Shadow");
+    }
+
+    [Fact]
     public void ReturnAnEmptyModelForAnUnconfiguredIVariables()
         => new VariablesFluidModelBuilder().Build(Substitute.For<global::TeaPie.Variables.IVariables>())
             .Should().BeEmpty();

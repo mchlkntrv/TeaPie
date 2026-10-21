@@ -240,6 +240,7 @@ Content-Type: application/json
 A few things worth knowing:
 
 - A condition on an **undefined** name (a typo, or a TeaPie variable that was never set) is falsy rather than an error — this is standard Fluid behavior, not a TeaPie-specific guard.
+- Variables tagged as `secret` are not visible to templates. In a condition or an `{% assign %}` they behave like an undefined name, even when a lower-priority scope has a non-secret variable with the same name. They also cannot be used as a loop source (see [Guards and Error Handling](#guards-and-error-handling)).
 - A dotted TeaPie variable name (e.g. `Temp.FreePartners`) used directly in a condition is evaluated as a single undefined identifier, not resolved as a nested member access — wrap it as `{{ Temp.FreePartners }}` inside the condition if you need its actual value.
 - `{% assign %}` used at the loop-body level is scoped to that iteration; `{% assign %}` used at the top level of the file (outside any loop) sets a real TeaPie variable, visible to the rest of the file and to later requests, exactly like `tp.SetVariable(...)` would.
 
@@ -251,6 +252,7 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | --- | --- |
 | Collection variable does not exist | Error naming the missing variable and the file* |
 | Variable exists but is not a collection | Error stating the variable must be a collection* |
+| Variable is tagged as `secret` | Error — its values would otherwise appear in the expanded file, in logs and in `--dump-expanded` output* |
 | Collection resolves to zero items (empty list, `()`, or a numeric range with no items) | Error — an accidentally empty collection is almost always a mistake* (for an **inner** loop, a log message instead — see [below](#empty-inner-collections)) |
 | A filter in a loop source (e.g. `{% for x in Items \| sort %}`), an unknown or duplicated loop option | Error naming the source and listing the supported [loop options](#loop-options) |
 | Loop would expand to more than **1000** requests | Error, to prevent runaway expansion |
