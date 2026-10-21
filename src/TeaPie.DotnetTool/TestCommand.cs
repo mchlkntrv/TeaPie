@@ -25,7 +25,7 @@ internal sealed class TestCommand : ApplicationCommandBase<TestCommand.Settings>
             .WithInitializationScript(PathResolver.Resolve(settings.InitializationScriptPath, string.Empty))
             .WithVariablesCaching(!settings.NoVariablesCaching)
             .WithExpandedContentDump(
-                settings.DumpExpanded?.IsSet == true, PathResolver.Resolve(settings.DumpExpanded?.Value, string.Empty))
+                settings.ShouldDumpExpanded, PathResolver.Resolve(settings.DumpExpandedDirectory, string.Empty))
             .WithDefaultPipeline();
 
         return appBuilder;
@@ -68,10 +68,18 @@ internal sealed class TestCommand : ApplicationCommandBase<TestCommand.Settings>
         [Description("Disables loading variables from file and caching them to file.")]
         public bool NoVariablesCaching { get; init; }
 
-        [CommandOption("--dump-expanded [DIRECTORY]")]
-        [Description("Outputs the content of each templated requests file after its templates are expanded. " +
-            "Without a value, the content is written to the console; with a directory, each file is written there, " +
-            "keeping its relative path.")]
-        public FlagValue<string>? DumpExpanded { get; init; }
+        [CommandOption("--dump-expanded")]
+        [DefaultValue(false)]
+        [Description("Writes the content of each templated requests file to the console after its templates are " +
+            "expanded.")]
+        public bool DumpExpanded { get; init; }
+
+        [CommandOption("--dump-expanded-dir <DIRECTORY>")]
+        [Description("Writes the content of each templated requests file after its templates are expanded into the " +
+            "given directory instead of the console, keeping its relative path. The directory must be outside the " +
+            "tested collection.")]
+        public string? DumpExpandedDirectory { get; init; }
+
+        internal bool ShouldDumpExpanded => DumpExpanded || !string.IsNullOrEmpty(DumpExpandedDirectory);
     }
 }

@@ -73,6 +73,29 @@ public class ExpandTemplatesStepDumpShould : IDisposable
         Directory.Exists(_dumpDirectory).Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RefuseToWriteADumpInsideTheTestedCollection(bool dumpIntoCollectionParent)
+    {
+        var (step, testCaseContext) = CreateStep(TemplatedContent);
+        var relativePath = testCaseContext.TestCase.RequestsFile.RelativePath;
+        var collectionPath = dumpIntoCollectionParent
+            ? Path.Combine(_dumpDirectory, relativePath.Split('/', '\\')[0])
+            : _dumpDirectory;
+        Directory.CreateDirectory(collectionPath);
+        var appContext = new ApplicationContextBuilder()
+            .WithPath(collectionPath)
+            .WithExpandedContentDump(_dumpDirectory)
+            .Build();
+
+        var act = () => step.Execute(appContext);
+
+        (await act.Should().ThrowAsync<InvalidOperationException>())
+            .WithMessage($"*{collectionPath}*outside*");
+        File.Exists(Path.Combine(_dumpDirectory, relativePath)).Should().BeFalse();
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_dumpDirectory))
