@@ -26,6 +26,11 @@ public class LoopBlockScannerShould
     [InlineData("{% for a in As %}A{% endfor %}mid{% for b in Bs %}B{% endfor %}", "a:As", "b:Bs")]
     [InlineData("{% for a in As %}{% for b in a.Bs %}{% for c in b.Cs %}BODY{% endfor %}{% endfor %}{% endfor %}",
         "a:As", "b:a.Bs", "c:b.Cs")]
+    [InlineData("{% raw %}{% for x in y %}{% endraw %}")]
+    [InlineData("{%- raw -%}{% endfor %}{% for x in y %}{%- endraw -%}")]
+    [InlineData("{% comment %}{% for x in y %}\n{% endfor %}{% endfor %}{% endcomment %}")]
+    [InlineData("{% for a in As %}{% raw %}{% endfor %}{% endraw %}{% endfor %}{% comment %}{% for{% endcomment %}",
+        "a:As")]
     public void FindEveryLoopBlockIncludingNestedOnes(string content, params string[] expected)
     {
         var blocks = new LoopBlockScanner().FindLoopBlocks(content);

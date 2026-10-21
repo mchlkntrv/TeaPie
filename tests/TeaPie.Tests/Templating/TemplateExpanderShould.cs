@@ -49,6 +49,10 @@ public class TemplateExpanderShould
 
     [Theory]
     [InlineData("{% raw %}{%Y-%m-%d}{% endraw %}", "{%Y-%m-%d}")]
+    [InlineData("{% raw %}{% for x in y %}{% endraw %}\nGET https://example.test", "{% for x in y %}\nGET https://example.test")]
+    [InlineData("{% comment %}{% for x in Xs %}{% endcomment %}GET https://example.test", "GET https://example.test")]
+    [InlineData("{% for i in (1..2) %}[{{ i }}{% raw %}{% endfor %}{% endraw %}]{% endfor %}",
+        "[1{% endfor %}][2{% endfor %}]")]
     [InlineData("{%- if true -%}YES{%- endif -%}", "YES")]
     [InlineData("{%unless false%}YES{%endunless%}", "YES")]
     [InlineData("{% assign x = 1 %}{{ x }}", "1")]
