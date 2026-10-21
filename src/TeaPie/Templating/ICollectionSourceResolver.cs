@@ -2,5 +2,5 @@
 
 internal interface ICollectionSourceResolver
 {
-    LoopSource Resolve(string sourceExpression);
+    LoopSource Resolve(string sourceExpression, IReadOnlyDictionary<string, object?> model);
 }

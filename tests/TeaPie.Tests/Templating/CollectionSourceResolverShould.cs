@@ -19,7 +19,7 @@ public class CollectionSourceResolverShould
     [MemberData(nameof(InlineLiterals))]
     public void ResolveAnInlineLiteralListIntoItsTypedItems(string expression, object?[] expected)
     {
-        var source = CreateResolver().Resolve(expression);
+        var source = Resolve(expression);
 
         source.ItemCount.Should().Be(expected.Length);
         source.Collection.Should().BeEquivalentTo(expected);
@@ -28,7 +28,7 @@ public class CollectionSourceResolverShould
     [Fact]
     public void ResolveANamedCollectionVariable()
     {
-        var source = CreateResolver().Resolve("FreePartners");
+        var source = Resolve("FreePartners");
 
         source.ItemCount.Should().Be(3);
         source.Collection.Should().NotBeNull();
@@ -39,7 +39,7 @@ public class CollectionSourceResolverShould
     [InlineData("(0..2147483647)", int.MaxValue)]
     public void ResolveANumericRangeToItsItemCountWithoutACollection(string expression, int expectedCount)
     {
-        var source = CreateResolver().Resolve(expression);
+        var source = Resolve(expression);
 
         source.ItemCount.Should().Be(expectedCount);
         source.Collection.Should().BeNull();
@@ -59,7 +59,7 @@ public class CollectionSourceResolverShould
     [InlineData("(99999999999..99999999999)", "*99999999999*")]
     public void ThrowAClearErrorForAnUnresolvableSource(string expression, string expectedMessage)
     {
-        var act = () => CreateResolver().Resolve(expression);
+        var act = () => Resolve(expression);
 
         act.Should().Throw<InvalidOperationException>().WithMessage(expectedMessage);
     }
@@ -71,13 +71,13 @@ public class CollectionSourceResolverShould
         variables.GlobalVariables.Set("Ids", new[] { "PUBLIC" });
         variables.TestCaseVariables.Set("Ids", new[] { "S3CR3T" }, Constants.SecretVariableTag);
 
-        var act = () => new CollectionSourceResolver(variables).Resolve("Ids");
+        var act = () => Resolve(variables, "Ids");
 
         act.Should().Throw<InvalidOperationException>()
             .Which.Message.Should().Contain("'Ids'").And.NotContain("S3CR3T");
     }
 
-    private static CollectionSourceResolver CreateResolver()
+    private static LoopSource Resolve(string expression)
     {
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("FreePartners", new List<string> { "01245", "012426", "012427" });
@@ -85,6 +85,9 @@ public class CollectionSourceResolverShould
         variables.SetVariable("AString", "abc123");
         variables.SetVariable("AnEmptyString", string.Empty);
         variables.SetVariable("SecretPartners", new List<string> { "S3CR3T" }, Constants.SecretVariableTag);
-        return new CollectionSourceResolver(variables);
+        return Resolve(variables, expression);
     }
+
+    private static LoopSource Resolve(global::TeaPie.Variables.Variables variables, string expression)
+        => new CollectionSourceResolver(variables).Resolve(expression, new VariablesFluidModelBuilder().Build(variables));
 }

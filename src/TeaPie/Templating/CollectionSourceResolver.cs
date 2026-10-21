@@ -8,7 +8,7 @@ namespace TeaPie.Templating;
 
 internal sealed partial class CollectionSourceResolver(IVariables variables) : ICollectionSourceResolver
 {
-    public LoopSource Resolve(string sourceExpression)
+    public LoopSource Resolve(string sourceExpression, IReadOnlyDictionary<string, object?> model)
     {
         var rangeMatch = NumericRangeRegex().Match(sourceExpression);
         if (rangeMatch.Success)
@@ -28,7 +28,7 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
                 $"Templating error: inline collection '{trimmed}' has unbalanced parentheses.");
         }
 
-        return ResolveNamedVariable(sourceExpression);
+        return ResolveNamedVariable(sourceExpression, model);
     }
 
     private static LoopSource ResolveNumericRange(string sourceExpression, Match rangeMatch)
@@ -45,7 +45,7 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
         return new LoopSource(null, (int)Math.Clamp(count, 0, int.MaxValue));
     }
 
-    private LoopSource ResolveNamedVariable(string sourceExpression)
+    private LoopSource ResolveNamedVariable(string sourceExpression, IReadOnlyDictionary<string, object?> model)
     {
         if (!variables.ContainsVariable(sourceExpression))
         {
@@ -53,7 +53,7 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
                 $"Templating error: collection variable '{sourceExpression}' referenced in a '{{% for %}}' loop was not found.");
         }
 
-        if (IsSecret(sourceExpression))
+        if (!model.TryGetValue(sourceExpression, out var value))
         {
             throw new InvalidOperationException(
                 $"Templating error: variable '{sourceExpression}' is tagged as '{Constants.SecretVariableTag}' and " +
@@ -61,7 +61,6 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
                 "requests file and in logs.");
         }
 
-        var value = variables.GetVariable<object?>(sourceExpression);
         if (value is not IEnumerable enumerable || value is string)
         {
             throw new InvalidOperationException(
@@ -71,20 +70,6 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
         var materialized = enumerable.Cast<object?>().ToList();
         return new LoopSource(materialized, materialized.Count);
     }
-
-    private bool IsSecret(string name)
-        => GetScopesInDescendingPriorityOrder()
-            .FirstOrDefault(scope => scope?.Contains(name) == true)?
-            .First(variable => variable.Name.Equals(name, StringComparison.Ordinal))
-            .HasTag(Constants.SecretVariableTag) == true;
-
-    private IEnumerable<VariablesCollection?> GetScopesInDescendingPriorityOrder() =>
-    [
-        variables.TestCaseVariables,
-        variables.CollectionVariables,
-        variables.EnvironmentVariables,
-        variables.GlobalVariables
-    ];
 
     private static LoopSource ResolveInlineLiteralList(string inner)
     {

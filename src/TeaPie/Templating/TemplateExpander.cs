@@ -43,8 +43,9 @@ internal sealed partial class TemplateExpander(
         var forSources = ParseForTagSources(blocks, filePath);
         var isDynamic = Enumerable.Range(0, blocks.Count).Select(i => IsDynamicSource(i, blocks, forSources)).ToArray();
 
+        var model = modelBuilder.Build(variables);
         var edits = new List<TextEdit>();
-        var sources = ResolveSourcesAndCollectSourceEdits(blocks, forSources, isDynamic, filePath, edits);
+        var sources = ResolveSourcesAndCollectSourceEdits(blocks, forSources, isDynamic, model, filePath, edits);
         AddDynamicSourceGuardEdits(edits, content, blocks, forSources, isDynamic);
 
         var topLevelIndices = FindTopLevelIndices(blocks);
@@ -56,7 +57,7 @@ internal sealed partial class TemplateExpander(
         var template = ParseTemplate(transformed, content, positionMap, filePath);
 
         var usage = new DynamicSourceUsage[blocks.Count];
-        var context = BuildRenderContext(blocks, forSources, sources, usage, filePath);
+        var context = BuildRenderContext(blocks, forSources, sources, model, usage, filePath);
         var rendered = RenderTemplate(template, context, filePath);
         var warnedIndices = WarnAboutDynamicSourcesEmptyForEveryOuterItem(forSources, usage, filePath);
 
@@ -91,8 +92,8 @@ internal sealed partial class TemplateExpander(
     }
 
     private LoopSource?[] ResolveSourcesAndCollectSourceEdits(
-        IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources, bool[] isDynamic, string filePath,
-        List<TextEdit> edits)
+        IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources, bool[] isDynamic,
+        IReadOnlyDictionary<string, object?> model, string filePath, List<TextEdit> edits)
     {
         var sources = new LoopSource?[blocks.Count];
 
@@ -107,7 +108,7 @@ internal sealed partial class TemplateExpander(
                 continue;
             }
 
-            var source = ResolveSource(sourceResolver, forSource.CollectionExpression, filePath);
+            var source = ResolveSource(sourceResolver, forSource.CollectionExpression, model, filePath);
             sources[i] = source;
 
             if (source.ItemCount == 0)
@@ -254,14 +255,14 @@ internal sealed partial class TemplateExpander(
 
     private TemplateContext BuildRenderContext(
         IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources, LoopSource?[] sources,
-        DynamicSourceUsage[] usage, string filePath)
+        IReadOnlyDictionary<string, object?> variablesModel, DynamicSourceUsage[] usage, string filePath)
     {
         var options = CreateMemberAccessOptions(filePath);
         options.MaxSteps = limits.MaxRenderSteps;
         options.Filters.AddFilter(GuardFilterName, (input, arguments, context) =>
             GuardDynamicSource(input, arguments, context, blocks, forSources, usage, filePath, logger));
 
-        var model = new Dictionary<string, object?>(modelBuilder.Build(variables));
+        var model = new Dictionary<string, object?>(variablesModel);
         for (var i = 0; i < blocks.Count; i++)
         {
             if (sources[i] is { Collection: not null } source)
@@ -465,11 +466,13 @@ internal sealed partial class TemplateExpander(
                 $"Templating error in '{filePath}': '{name}' is undefined.")
         };
 
-    private static LoopSource ResolveSource(ICollectionSourceResolver sourceResolver, string sourceExpression, string filePath)
+    private static LoopSource ResolveSource(
+        ICollectionSourceResolver sourceResolver, string sourceExpression, IReadOnlyDictionary<string, object?> model,
+        string filePath)
     {
         try
         {
-            return sourceResolver.Resolve(sourceExpression);
+            return sourceResolver.Resolve(sourceExpression, model);
         }
         catch (InvalidOperationException ex)
         {
