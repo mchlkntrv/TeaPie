@@ -48,7 +48,7 @@ internal sealed partial class TemplateExpander(
         AddDynamicSourceGuardEdits(edits, content, blocks, forSources, isDynamic);
 
         var topLevelIndices = FindTopLevelIndices(blocks);
-        AddTopLevelLoopMarkerEdits(edits, blocks, topLevelIndices);
+        AddTopLevelLoopMarkerEdits(edits, content, blocks, topLevelIndices);
 
         edits.AddRange(masker.FindMaskEdits(content, blocks));
 
@@ -188,14 +188,52 @@ internal sealed partial class TemplateExpander(
         => Enumerable.Range(0, blocks.Count).Where(i => LoopBlockHierarchy.IsTopLevel(i, blocks)).ToList();
 
     private static void AddTopLevelLoopMarkerEdits(
-        List<TextEdit> edits, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<int> topLevelIndices)
+        List<TextEdit> edits, string content, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<int> topLevelIndices)
     {
         foreach (var rootIndex in topLevelIndices)
         {
             var block = blocks[rootIndex];
-            edits.Add(new TextEdit(block.StartIndex, 0, $"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}"));
-            edits.Add(new TextEdit(block.StartIndex + block.Length, 0, $"{TreeEndMarkerPrefix}{rootIndex}{MarkerSuffix}"));
+            var endIndex = block.StartIndex + block.Length;
+            edits.Add(new TextEdit(
+                FindStartMarkerIndex(content, block.StartIndex), 0, $"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}"));
+            edits.Add(new TextEdit(
+                FindEndMarkerIndex(content, endIndex), 0, $"{TreeEndMarkerPrefix}{rootIndex}{MarkerSuffix}"));
         }
+    }
+
+    // A marker must sit outside the whitespace that '{%-' / '-%}' trims, otherwise the trim stops at the marker.
+    // When the whitespace after '-%}' is followed by '{%-', that tag trims it, so the end marker stays at the tag
+    // and does not end up between the whitespace and a start marker moved in front of it.
+    private static int FindStartMarkerIndex(string content, int tagStartIndex)
+    {
+        if (content[tagStartIndex + 2] != '-')
+        {
+            return tagStartIndex;
+        }
+
+        var index = tagStartIndex;
+        while (index > 0 && char.IsWhiteSpace(content[index - 1]))
+        {
+            index--;
+        }
+
+        return index;
+    }
+
+    private static int FindEndMarkerIndex(string content, int tagEndIndex)
+    {
+        if (content[tagEndIndex - 3] != '-')
+        {
+            return tagEndIndex;
+        }
+
+        var index = tagEndIndex;
+        while (index < content.Length && char.IsWhiteSpace(content[index]))
+        {
+            index++;
+        }
+
+        return string.CompareOrdinal(content, index, "{%-", 0, 3) == 0 ? tagEndIndex : index;
     }
 
     private static IFluidTemplate ParseTemplate(

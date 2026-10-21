@@ -82,6 +82,11 @@ public class TemplateExpanderShould
     [InlineData("{% for p in Temp.FreePartners %}{{ p }}{% endfor %}", "ab")]
     [InlineData("{% for i in (1..3) %}[{{ i }}]{% endfor %}", "[1][2][3]")]
     [InlineData("{%- for i in (1..2) -%}[{{ i }}]{%- endfor -%}", "[1][2]")]
+    [InlineData("A\n\n{%- for i in (1..2) -%}\n[{{ i }}]\n{%- endfor -%}\n\nB", "A[1][2]B")]
+    [InlineData("A\r\n\r\n{%- for i in (1..2) -%}\r\n[{{ i }}]\r\n{%- endfor -%}\r\n\r\nB", "A[1][2]B")]
+    [InlineData("A \n{%- for i in (1..2) %}[{{ i }}]{% endfor %} \nB", "A[1][2] \nB")]
+    [InlineData("A\n{% for i in (1..2) %}[{{ i }}]{% endfor -%}\n B", "A\n[1][2]B")]
+    [InlineData("{% for i in (1..1) %}x{% endfor -%}\n \n{%- for j in (1..1) %}y{% endfor %}", "xy")]
     [InlineData("{% for s in (\"new\", \"used\") %}{{ forloop.index }}:{{ s }};{% endfor %}", "1:new;2:used;")]
     [InlineData("pre {% for a in (1..2) %}A{{ a }}{% endfor %} mid {% for b in Tenants %}{{ b.Name }}{% endfor %} post",
         "pre A1A2 mid AcmeGlobex post")]
@@ -178,6 +183,8 @@ public class TemplateExpanderShould
     [InlineData("{% for i in (1..1001) %}[{{ i }}]{% endfor %}", "*1001*1000*")]
     [InlineData("{% for c in BigOuters %}{% for i in c.Items %}### r\nGET https://example.test/{{ i }}\n{% endfor %}" +
         "{% endfor %}", "*1500*1000*BigOuters*")]
+    [InlineData("\n{%- for c in BigOuters -%}\n{% for i in c.Items %}### r\nGET https://example.test/{{ i }}\n{% endfor %}" +
+        "\n{%- endfor -%}\n", "*1500*1000*BigOuters*")]
     [InlineData("{% for i in (1..99999999999) %}{{ i }}{% endfor %}", "*99999999999*")]
     [InlineData("{% for p in EmptyList %}{{ p }}{% endfor %}", "*zero items*")]
     [InlineData("{% if Flag %}{% for p in Missing %}{{ p }}{% endfor %}{% endif %}",
