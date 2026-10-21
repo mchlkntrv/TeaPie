@@ -48,6 +48,8 @@ public class CollectionSourceResolverShould
     [Theory]
     [InlineData("DoesNotExist", "*DoesNotExist*was not found*")]
     [InlineData("NotACollection", "*must be a collection*")]
+    [InlineData("AString", "*'AString'*must be a collection*")]
+    [InlineData("AnEmptyString", "*'AnEmptyString'*must be a collection*")]
     [InlineData("SecretPartners", "*SecretPartners*tagged as 'secret'*")]
     [InlineData("(1, oops, 3)", "*oops*")]
     [InlineData("(\"a\", \"b\"", "*unbalanced*")]
@@ -80,6 +82,8 @@ public class CollectionSourceResolverShould
         var variables = new global::TeaPie.Variables.Variables();
         variables.SetVariable("FreePartners", new List<string> { "01245", "012426", "012427" });
         variables.SetVariable("NotACollection", 42);
+        variables.SetVariable("AString", "abc123");
+        variables.SetVariable("AnEmptyString", string.Empty);
         variables.SetVariable("SecretPartners", new List<string> { "S3CR3T" }, Constants.SecretVariableTag);
         return new CollectionSourceResolver(variables);
     }

@@ -62,7 +62,7 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
         }
 
         var value = variables.GetVariable<object?>(sourceExpression);
-        if (value is not IEnumerable enumerable)
+        if (value is not IEnumerable enumerable || value is string)
         {
             throw new InvalidOperationException(
                 $"Templating error: variable '{sourceExpression}' referenced in a '{{% for %}}' loop must be a collection.");

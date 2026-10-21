@@ -254,7 +254,7 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Situation | Result |
 | --- | --- |
 | Collection variable does not exist | Error naming the missing variable and the file* |
-| Variable exists but is not a collection | Error stating the variable must be a collection* |
+| Variable exists but is not a collection (a string counts as not a collection, it is never iterated character by character) | Error stating the variable must be a collection* |
 | Variable is tagged as `secret` | Error — its values would otherwise appear in the expanded file, in logs and in `--dump-expanded` output* |
 | Collection resolves to zero items (empty list, `()`, or a numeric range with no items) | Error — an accidentally empty collection is almost always a mistake* (for an **inner** loop, a log message instead — see [below](#empty-inner-collections)) |
 | A filter in a loop source (e.g. `{% for x in Items \| sort %}`), an unknown or duplicated loop option | Error naming the source and listing the supported [loop options](#loop-options) |
