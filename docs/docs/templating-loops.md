@@ -190,6 +190,8 @@ A repeated name is only a warning when it is written literally (without `{{ }}`)
 
 When the duplicated name also comes from a loop, the error suggests including `{{ forloop.index }}` in the name or renaming the other requests.
 
+A name built with `{{ }}` is only known after rendering, so it is not checked against the literal names in the same loop body. If the duplicate-name warning reports more requests than expected (one per iteration of each loop that declares the name), look for another `# @name` in the loop body whose expression renders the same name — for example `# @name {{ n }}` after `{% assign n = "Login" %}` next to `# @name Login`. Such a duplicate is only a warning, although it is a mistake.
+
 ## Multiple Loops in One File
 
 A single request file can contain several `{% for %}` loops, including plain (non-looped) requests between them:
