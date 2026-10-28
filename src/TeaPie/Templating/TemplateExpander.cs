@@ -25,9 +25,6 @@ internal sealed partial class TemplateExpander(
     private const string ContinueOffset = "continue";
     private const string GuardTargetName = "__teapie_loop_guard";
     private const string GuardFilterName = "__teapie_guard_loop_source";
-    private const string TreeStartMarkerPrefix = "\u0000__teapie_loop_tree_start_";
-    private const string TreeEndMarkerPrefix = "\u0000__teapie_loop_tree_end_";
-    private const string MarkerSuffix = "__\u0000";
 
     private static readonly FluidParser Parser = new();
 
@@ -47,23 +44,22 @@ internal sealed partial class TemplateExpander(
         var edits = new List<TextEdit>();
         var sources = ResolveSourcesAndCollectSourceEdits(blocks, forSources, isDynamic, model, filePath, edits);
         AddDynamicSourceGuardEdits(edits, content, blocks, forSources, isDynamic);
-
-        var topLevelIndices = FindTopLevelIndices(blocks);
-        AddTopLevelLoopMarkerEdits(edits, content, blocks, topLevelIndices);
-
         edits.AddRange(masker.FindMaskEdits(content, blocks));
 
         var transformed = TextEditApplier.Apply(content, edits, out var positionMap);
-        var template = ParseTemplate(transformed, content, positionMap, filePath);
+        var topLevelIndices = FindTopLevelIndices(blocks);
+        var requestCounts = new int?[blocks.Count];
+        var template = WrapTopLevelLoops(
+            ParseTemplate(transformed, content, positionMap, filePath), blocks, topLevelIndices, requestCounts, filePath);
 
         var usage = new DynamicSourceUsage[blocks.Count];
         var context = BuildRenderContext(blocks, forSources, sources, model, usage, filePath);
         var rendered = RenderTemplate(template, context, filePath);
         var warnedIndices = WarnAboutDynamicSourcesEmptyForEveryOuterItem(forSources, usage, filePath);
 
-        ValidateTopLevelLoopRequestCounts(rendered, blocks, forSources, topLevelIndices, warnedIndices, filePath);
+        ValidateTopLevelLoopRequestCounts(requestCounts, blocks, forSources, topLevelIndices, warnedIndices, filePath);
 
-        return StripTopLevelLoopMarkers(rendered, topLevelIndices);
+        return rendered;
     }
 
     private void WarnAboutUnsupportedTagDelimiter(string content, string filePath)
@@ -186,55 +182,27 @@ internal sealed partial class TemplateExpander(
     }
 
     private static List<int> FindTopLevelIndices(IReadOnlyList<LoopBlock> blocks)
-        => Enumerable.Range(0, blocks.Count).Where(i => LoopBlockHierarchy.IsTopLevel(i, blocks)).ToList();
+        => Enumerable.Range(0, blocks.Count)
+            .Where(i => LoopBlockHierarchy.IsTopLevel(i, blocks))
+            .OrderBy(i => blocks[i].StartIndex)
+            .ToList();
 
-    private static void AddTopLevelLoopMarkerEdits(
-        List<TextEdit> edits, string content, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<int> topLevelIndices)
+    private static IFluidTemplate WrapTopLevelLoops(
+        IFluidTemplate template, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<int> topLevelIndices,
+        int?[] requestCounts, string filePath)
     {
-        foreach (var rootIndex in topLevelIndices)
+        try
         {
-            var block = blocks[rootIndex];
-            var endIndex = block.StartIndex + block.Length;
-            edits.Add(new TextEdit(
-                FindStartMarkerIndex(content, block.StartIndex), 0, $"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}"));
-            edits.Add(new TextEdit(
-                FindEndMarkerIndex(content, endIndex), 0, $"{TreeEndMarkerPrefix}{rootIndex}{MarkerSuffix}"));
+            return TopLevelLoopWrapper.Wrap(
+                template,
+                topLevelIndices.Select(i => blocks[i].LoopVariableName).ToList(),
+                (loopIndex, output) => requestCounts[topLevelIndices[loopIndex]] = CountRequests(output));
         }
-    }
-
-    // A marker must sit outside the whitespace that '{%-' / '-%}' trims, otherwise the trim stops at the marker.
-    // When the whitespace after '-%}' is followed by '{%-', that tag trims it, so the end marker stays at the tag
-    // and does not end up between the whitespace and a start marker moved in front of it.
-    private static int FindStartMarkerIndex(string content, int tagStartIndex)
-    {
-        if (content[tagStartIndex + 2] != '-')
+        catch (InvalidOperationException ex)
         {
-            return tagStartIndex;
+            throw new InvalidOperationException(
+                $"Templating error in '{filePath}': {StripTemplatingErrorPrefix(ex.Message)}", ex);
         }
-
-        var index = tagStartIndex;
-        while (index > 0 && char.IsWhiteSpace(content[index - 1]))
-        {
-            index--;
-        }
-
-        return index;
-    }
-
-    private static int FindEndMarkerIndex(string content, int tagEndIndex)
-    {
-        if (content[tagEndIndex - 3] != '-')
-        {
-            return tagEndIndex;
-        }
-
-        var index = tagEndIndex;
-        while (index < content.Length && char.IsWhiteSpace(content[index]))
-        {
-            index++;
-        }
-
-        return string.CompareOrdinal(content, index, "{%-", 0, 3) == 0 ? tagEndIndex : index;
     }
 
     private static IFluidTemplate ParseTemplate(
@@ -389,26 +357,19 @@ internal sealed partial class TemplateExpander(
         }
     }
 
+    private static int CountRequests(string output)
+        => RequestSeparatorRegex().Split(output).Count(fragment => RequestMethodAndUriLineRegex().IsMatch(fragment));
+
     private void ValidateTopLevelLoopRequestCounts(
-        string rendered, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources,
+        int?[] requestCounts, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources,
         IReadOnlyList<int> topLevelIndices, IReadOnlySet<int> warnedIndices, string filePath)
     {
         foreach (var rootIndex in topLevelIndices)
         {
-            var startMarker = $"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}";
-            var endMarker = $"{TreeEndMarkerPrefix}{rootIndex}{MarkerSuffix}";
-            var startIndex = rendered.IndexOf(startMarker, StringComparison.Ordinal);
-            var endIndex = rendered.IndexOf(endMarker, StringComparison.Ordinal);
-
-            if (startIndex < 0 || endIndex < 0)
+            if (requestCounts[rootIndex] is not { } requestCount)
             {
                 continue;
             }
-
-            var segment = rendered[(startIndex + startMarker.Length)..endIndex];
-
-            var requestCount = RequestSeparatorRegex().Split(segment)
-                .Count(fragment => RequestMethodAndUriLineRegex().IsMatch(fragment));
 
             if (requestCount > limits.MaxExpandedRequests && LoopBlockHierarchy.IsNestingRoot(rootIndex, blocks))
             {
@@ -432,18 +393,6 @@ internal sealed partial class TemplateExpander(
     }
 
     private static bool DeclaresRequests(LoopBlock block) => RequestMethodAndUriLineRegex().IsMatch(block.Body);
-
-    private static string StripTopLevelLoopMarkers(string rendered, IReadOnlyList<int> topLevelIndices)
-    {
-        foreach (var rootIndex in topLevelIndices)
-        {
-            rendered = rendered
-                .Replace($"{TreeStartMarkerPrefix}{rootIndex}{MarkerSuffix}", string.Empty, StringComparison.Ordinal)
-                .Replace($"{TreeEndMarkerPrefix}{rootIndex}{MarkerSuffix}", string.Empty, StringComparison.Ordinal);
-        }
-
-        return rendered;
-    }
 
     private static IReadOnlyList<LoopBlock> FindLoopBlocks(ILoopBlockScanner scanner, string content, string filePath)
     {

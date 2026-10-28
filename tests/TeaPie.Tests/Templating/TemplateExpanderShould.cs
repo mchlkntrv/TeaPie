@@ -185,6 +185,15 @@ public class TemplateExpanderShould
         "{% endfor %}", "*1500*1000*BigOuters*")]
     [InlineData("\n{%- for c in BigOuters -%}\n{% for i in c.Items %}### r\nGET https://example.test/{{ i }}\n{% endfor %}" +
         "\n{%- endfor -%}\n", "*1500*1000*BigOuters*")]
+    [InlineData("{% for c in SmallOuters %}{% for i in c.Items %}### r\nGET https://example.test/{{ i }}\n{% endfor %}" +
+        "{% endfor %}{% for c in BigOuters %}{% for i in c.Items %}### r\nGET https://example.test/{{ i }}\n" +
+        "{% endfor %}{% endfor %}", "*1500*1000*BigOuters*")]
+    [InlineData("{% unless Flag %}{% for c in BigOuters %}{% for i in c.Items %}### r\nGET https://example.test/{{ i }}\n" +
+        "{% endfor %}{% endfor %}{% endunless %}", "*1500*1000*BigOuters*")]
+    [InlineData("{% case Environment %}{% when 'staging' %}{% for c in BigOuters %}{% for i in c.Items %}### r\n" +
+        "GET https://example.test/{{ i }}\n{% endfor %}{% endfor %}{% endcase %}", "*1500*1000*BigOuters*")]
+    [InlineData("{% if Flag %}{% elsif true %}{% for c in BigOuters %}{% for i in c.Items %}### r\n" +
+        "GET https://example.test/{{ i }}\n{% endfor %}{% endfor %}{% endif %}", "*1500*1000*BigOuters*")]
     [InlineData("{% for i in (1..99999999999) %}{{ i }}{% endfor %}", "*99999999999*")]
     [InlineData("{% for p in EmptyList %}{{ p }}{% endfor %}", "*zero items*")]
     [InlineData("{% if Flag %}{% for p in Missing %}{{ p }}{% endfor %}{% endif %}",
@@ -348,6 +357,7 @@ public class TemplateExpanderShould
     [Theory]
     [InlineData("### Create\nPOST https://example.test/items\n\n[{% for i in Items limit: 0 %}{{ i }}{% endfor %}]\n")]
     [InlineData("{% for c in Companies limit: 1 %}{% for l in c.Licenses %}{{ l }}{% endfor %}{% endfor %}")]
+    [InlineData("{% if Flag %}{% for i in Items %}### R\nPOST https://example.test/{{ i }}\n{% endfor %}{% endif %}")]
     public void NotLogAnythingWhenNoRequestsAreMissing(string content)
         => ExpandAndCollectLogEntries(content).Should().BeEmpty();
 
