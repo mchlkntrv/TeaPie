@@ -149,8 +149,8 @@ teapie test [path] [--temp-path <path>] [-e|--env <envName>] [--env-file <file>]
 | `-r`, `--report-file` | Path to a file for generating a summary report of test results. If not specified, no report is created. | `null` |
 | `-i`, `--init-script` | Path to an initialization script to run before the first test case. If not provided, `init.csx` is auto-discovered. | Auto-detected |
 | `--no-cache-vars` | Disables loading and caching variables from/to file. | `false` |
-| `--dump-expanded` | Writes each templated requests file to the console after its templates are expanded. See [Templating Loops](templating-loops.md#inspecting-the-expanded-content). | `false` |
-| `--dump-expanded-dir <directory>` | Writes each templated requests file after its templates are expanded into `<directory>`, keeping its relative path, instead of the console. The directory must be outside the tested collection. | `null` |
+| `--dump-expanded` | Writes each templated requests file to the console after its templates are expanded. Can't be combined with `-q`, which silences the console. See [Templating Loops](templating-loops.md#inspecting-the-expanded-content). | `false` |
+| `--dump-expanded-dir <directory>` | Writes each templated requests file after its templates are expanded into `<directory>`, keeping its relative path, instead of the console. The directory must be outside the tested collection. Turns the dump on by itself. | `null` |
 | `--log-file` | Specifies the path to the file where all logs will be saved. | `null` |
 | `--log-file-log-level` | Log level for the log file (only applicable if `--log-file` is set). Supported levels: `Trace`, `Debug`, `Information`, `Warning`, `Error`, `Critical`, `None`. | `Information` |
 | `--requests-log-file` | Specifies path to the file where structured JSON data about HTTP requests will be saved. | `null` |

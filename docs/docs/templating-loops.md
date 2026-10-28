@@ -323,7 +323,11 @@ teapie test ./Tests --dump-expanded                     # print each expanded fi
 teapie test ./Tests --dump-expanded-dir ../expanded     # write each expanded file into ../expanded, keeping its relative path
 ```
 
-The dump directory must be **outside** the tested collection. A dumped `-req.http` file inside the collection could overwrite the original template, or be picked up as an extra test case by the next run. TeaPie therefore checks the dump directory before the first test case runs and stops with an error instead of writing it there.
+`--dump-expanded-dir` turns the dump on by itself, so `--dump-expanded` is not needed with it. `--dump-expanded` alone can't be combined with `-q|--quiet`, which silences the console, so TeaPie stops with an error; use `--dump-expanded-dir` in quiet runs.
+
+The dump directory must be **outside** the tested collection. A dumped `-req.http` file inside the collection could overwrite the original template, or be picked up as an extra test case by the next run. TeaPie therefore checks the dump directory before the first test case runs and stops with an error instead of writing it there. When testing a single file, only that file's folder counts as the collection. Keep the dump directory outside of any folder you later run as a collection.
+
+If the expansion of a file fails, nothing is dumped for it. The error names the file and the tag that caused it.
 
 Only files that contain templates are dumped, after their `-init.csx` script has run, so the output matches what is actually executed. The requests are still sent as usual — the dump is a by-product of a normal run (expansion depends on variables set by scripts and earlier requests, so it can't be produced without running them). A `.tp` file is written with an extra `.http` extension (e.g. `seed.tp.http`), since only its request part is expanded. When the `.tp` file holds named test cases (`--- TESTCASE <Name>`), each of them is written separately with its name in the file name (e.g. `seed.tp.First.http` and `seed.tp.Second.http`), and the console header shows it as `seed.tp (First)`. Characters that a file name can't contain are replaced with `_`.
 

@@ -132,10 +132,10 @@ public sealed class ApplicationBuilder
         return this;
     }
 
-    public ApplicationBuilder WithExpandedContentDump(bool dumpExpandedContent, string dumpPath = "")
+    public ApplicationBuilder WithExpandedContentDump(string dumpDirectory = "")
     {
-        _dumpExpandedContent = dumpExpandedContent;
-        _expandedContentDumpPath = dumpPath;
+        _dumpExpandedContent = true;
+        _expandedContentDumpPath = dumpDirectory;
         return this;
     }
 
