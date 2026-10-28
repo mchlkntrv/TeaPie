@@ -27,14 +27,37 @@ public class ExpandedContentDumperShould : IDisposable
         _console.Output.Should().BeEmpty();
     }
 
-    [Fact]
-    public void WriteTheExpandedContentToTheConsoleWhenNoDumpDirectoryIsGiven()
+    [Theory]
+    [InlineData("GET.http", null, "GET.http")]
+    [InlineData("Seed.tp", "Seed", "Seed.tp.http")]
+    [InlineData("Seed.tp", "seed", "Seed.tp.http")]
+    [InlineData("Seed.tp", "First", "Seed.tp.First.http")]
+    [InlineData("Seed.tp", "Create user/admin", "Seed.tp.Create user_admin.http")]
+    public void NameTheDumpFileAfterTheRequestsFileAndTheTestCaseOfATpFile(
+        string fileName, string? tpTestCaseName, string expectedDumpFileName)
     {
-        var testCase = CreateTestCase();
+        var testCase = CreateTestCase(fileName, tpTestCaseName);
+
+        CreateDumper().Dump(CreateApplicationContext(_dumpDirectory), testCase, ExpandedContent);
+
+        var expectedDumpFilePath = Path.Combine(
+            _dumpDirectory, Path.GetDirectoryName(testCase.RequestsFile.RelativePath)!, expectedDumpFileName);
+        Directory.GetFiles(_dumpDirectory, "*", SearchOption.AllDirectories)
+            .Should().Equal(expectedDumpFilePath);
+    }
+
+    [Theory]
+    [InlineData("GET.http", null, "GET.http ")]
+    [InlineData("Seed.tp", "Seed", "Seed.tp ")]
+    [InlineData("Seed.tp", "First", "Seed.tp (First) ")]
+    public void WriteTheExpandedContentToTheConsoleWhenNoDumpDirectoryIsGiven(
+        string fileName, string? tpTestCaseName, string expectedHeaderEnd)
+    {
+        var testCase = CreateTestCase(fileName, tpTestCaseName);
 
         CreateDumper().Dump(CreateApplicationContext(string.Empty), testCase, ExpandedContent);
 
-        _console.Output.Should().Contain(Path.GetFileName(testCase.RequestsFile.RelativePath))
+        _console.Output.Should().Contain(expectedHeaderEnd)
             .And.Contain("GET https://example.test/expanded");
         Directory.Exists(_dumpDirectory).Should().BeFalse();
     }
@@ -61,6 +84,38 @@ public class ExpandedContentDumperShould : IDisposable
         System.IO.File.Exists(Path.Combine(_dumpDirectory, relativePath)).Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData("", "", true)]
+    [InlineData("Demo", "", true)]
+    [InlineData("Demo", "Demo/out", true)]
+    [InlineData("Demo", "out", false)]
+    [InlineData("Demo", null, false)]
+    public void CheckBeforeTheRunThatNoDumpWouldBeWrittenInsideTheTestedCollection(
+        string collectionSubPath, string? dumpSubPath, bool expectedRefusal)
+    {
+        var testCase = CreateTestCase();
+        var collectionPath = Path.Combine(_dumpDirectory, collectionSubPath);
+        Directory.CreateDirectory(collectionPath);
+        var structure = new CollectionStructure();
+        structure.TryAddTestCase(testCase);
+        var appContext = new ApplicationContextBuilder()
+            .WithPath(collectionPath)
+            .WithExpandedContentDump(dumpSubPath is null ? string.Empty : Path.Combine(_dumpDirectory, dumpSubPath))
+            .Build();
+        appContext.CollectionStructure = structure;
+
+        var act = () => CreateDumper().EnsureDumpsAreOutsideOfTestedCollection(appContext);
+
+        if (expectedRefusal)
+        {
+            act.Should().Throw<InvalidOperationException>().WithMessage($"*{collectionPath}*outside*");
+        }
+        else
+        {
+            act.Should().NotThrow();
+        }
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_dumpDirectory))
@@ -75,6 +130,15 @@ public class ExpandedContentDumperShould : IDisposable
 
     private static TestCase CreateTestCase()
         => RequestHelper.PrepareTestCaseContext(RequestsIndex.RequestWithFullStructure, false).TestCase;
+
+    private static TestCase CreateTestCase(string fileName, string? tpTestCaseName)
+    {
+        var file = RequestHelper.GetFile(Path.Combine(RequestsIndex.RootFolderFullPath, fileName));
+
+        return tpTestCaseName is null
+            ? new TestCase(file)
+            : new TestCase(file) { Name = tpTestCaseName, IsFromTpFile = true };
+    }
 
     private static ApplicationContext CreateApplicationContext(string dumpPath)
         => new ApplicationContextBuilder()
