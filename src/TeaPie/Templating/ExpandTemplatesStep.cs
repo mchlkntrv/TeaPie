@@ -16,7 +16,8 @@ internal sealed class ExpandTemplatesStep(
         ExecutionContextValidator.ValidateParameter(
             testCaseExecutionContext.RequestsFileContent, out string content, "expand templates", "the requests file's content");
 
-        var expandedContent = templateExpander.Expand(content, testCaseExecutionContext.TestCase.RequestsFile.RelativePath);
+        var expansion = templateExpander.Expand(content, testCaseExecutionContext.TestCase.RequestsFile.RelativePath);
+        var expandedContent = expansion.Content;
         testCaseExecutionContext.RequestsFileContent = expandedContent;
 
         if (!TemplateDetector.ContainsTemplateTag(content))
@@ -24,7 +25,7 @@ internal sealed class ExpandTemplatesStep(
             return;
         }
 
-        testCaseExecutionContext.AllowsDuplicateRequestNames = true;
+        testCaseExecutionContext.TemplatedRequestNames = expansion.RequestNames;
 
         LogExpansionResult(context, testCaseExecutionContext, content, expandedContent);
         LogExpandedContent(context, testCaseExecutionContext, expandedContent);

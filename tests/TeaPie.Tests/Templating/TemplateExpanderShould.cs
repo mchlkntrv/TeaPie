@@ -21,7 +21,7 @@ public class TemplateExpanderShould
     {
         const string content = "POST {{ApiGatewayBaseUrl}}/companies\n\n{ \"name\": \"Acme\" }";
 
-        var result = CreateExpander().Expand(content, FilePath);
+        var result = CreateExpander().Expand(content, FilePath).Content;
 
         result.Should().BeSameAs(content);
         ExpandAndCollectLogEntries(content).Should().BeEmpty();
@@ -38,7 +38,7 @@ public class TemplateExpanderShould
     {
         var logger = new RecordingLogger<TemplateExpander>();
 
-        var result = CreateExpander(CreateVariables(), logger: logger).Expand(content, FilePath);
+        var result = CreateExpander(CreateVariables(), logger: logger).Expand(content, FilePath).Content;
 
         result.Should().BeSameAs(content);
         logger.Entries.Should().ContainSingle().Which.Should().Match<(LogLevel Level, string Message)>(entry =>
@@ -270,7 +270,9 @@ public class TemplateExpanderShould
     {
         var expander = CreateExpander(CreateVariables(), new TemplatingLimits { MaxExpandedRequests = 3 });
 
-        var act = () => expander.Expand($"{{% for i in Items limit: {limit} %}}{{{{ i }}}}{{% endfor %}}", FilePath);
+        var act = () => expander
+            .Expand($"{{% for i in Items limit: {limit} %}}{{{{ i }}}}{{% endfor %}}", FilePath)
+            .Content;
 
         if (succeeds)
         {
@@ -288,7 +290,8 @@ public class TemplateExpanderShould
         var variables = CreateVariables();
 
         var result = CreateExpander(variables)
-            .Expand("{% assign Label = 'free' %}{% assign Greeting = 'Overridden' %}{{ Label }} {{ Greeting }}", FilePath);
+            .Expand("{% assign Label = 'free' %}{% assign Greeting = 'Overridden' %}{{ Label }} {{ Greeting }}", FilePath)
+            .Content;
 
         result.Should().Be("free Overridden");
         variables.ContainsVariable("Label").Should().BeFalse();
@@ -379,7 +382,7 @@ public class TemplateExpanderShould
         ExtractReportedPosition(message).Should().Be(FindOriginalPosition(content, "{% badtag %}"));
     }
 
-    private static string Expand(string content) => CreateExpander(CreateVariables()).Expand(content, FilePath);
+    private static string Expand(string content) => CreateExpander(CreateVariables()).Expand(content, FilePath).Content;
 
     private static List<(LogLevel Level, string Message)> ExpandAndCollectLogEntries(string content)
     {

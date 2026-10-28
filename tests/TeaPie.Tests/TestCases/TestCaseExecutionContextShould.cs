@@ -1,4 +1,5 @@
 ﻿using FluentAssertions;
+using TeaPie.Templating;
 using TeaPie.TestCases;
 
 namespace TeaPie.Tests.TestCases;
@@ -6,9 +7,13 @@ namespace TeaPie.Tests.TestCases;
 public class TestCaseExecutionContextShould
 {
     [Fact]
-    public void OverwriteARequestAndResponseWithTheSameNameWhenDuplicateNamesAreAllowed()
+    public void OverwriteARequestAndResponseWithARepeatableTemplatedName()
     {
-        var context = new TestCaseExecutionContext(null!) { AllowsDuplicateRequestNames = true };
+        var repeatable = new HashSet<string>(StringComparer.Ordinal) { "CreatePartner" };
+        var context = new TestCaseExecutionContext(null!)
+        {
+            TemplatedRequestNames = new TemplatedRequestNames(repeatable, repeatable)
+        };
         var secondRequest = new HttpRequestMessage();
         var secondResponse = new HttpResponseMessage();
 

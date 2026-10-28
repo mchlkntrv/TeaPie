@@ -2,5 +2,5 @@
 
 internal interface ITemplateExpander
 {
-    string Expand(string content, string filePath);
+    TemplateExpansionResult Expand(string content, string filePath);
 }

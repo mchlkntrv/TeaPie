@@ -28,12 +28,12 @@ internal sealed partial class TemplateExpander(
 
     private static readonly FluidParser Parser = new();
 
-    public string Expand(string content, string filePath)
+    public TemplateExpansionResult Expand(string content, string filePath)
     {
         if (!TemplateDetector.ContainsTemplateTag(content))
         {
             WarnAboutUnsupportedTagDelimiter(content, filePath);
-            return content;
+            return new TemplateExpansionResult(content, TemplatedRequestNames.None);
         }
 
         var blocks = FindLoopBlocks(scanner, content, filePath);
@@ -49,8 +49,10 @@ internal sealed partial class TemplateExpander(
         var transformed = TextEditApplier.Apply(content, edits, out var positionMap);
         var topLevelIndices = FindTopLevelIndices(blocks);
         var requestCounts = new int?[blocks.Count];
+        var loopOutputs = new List<string>();
         var template = WrapTopLevelLoops(
-            ParseTemplate(transformed, content, positionMap, filePath), blocks, topLevelIndices, requestCounts, filePath);
+            ParseTemplate(transformed, content, positionMap, filePath), blocks, topLevelIndices, requestCounts,
+            loopOutputs, filePath);
 
         var usage = new DynamicSourceUsage[blocks.Count];
         var context = BuildRenderContext(blocks, forSources, sources, model, usage, filePath);
@@ -59,7 +61,36 @@ internal sealed partial class TemplateExpander(
 
         ValidateTopLevelLoopRequestCounts(requestCounts, blocks, forSources, topLevelIndices, warnedIndices, filePath);
 
-        return rendered;
+        return new TemplateExpansionResult(rendered, FindTemplatedRequestNames(content, rendered, blocks, loopOutputs));
+    }
+
+    private static TemplatedRequestNames FindTemplatedRequestNames(
+        string content, string rendered, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<string> loopOutputs)
+    {
+        var loopCounts = RequestNameDeclarations.Count(string.Join('\n', loopOutputs));
+        var innermostLoopsOfLiteralDeclarations = RequestNameDeclarations.Find(content)
+            .Where(declaration => declaration.IsLiteral)
+            .ToLookup(
+                declaration => declaration.Name,
+                declaration => LoopBlockHierarchy.GetEnclosingBlockIndicesInnermostFirst(declaration.Index, blocks)
+                    .DefaultIfEmpty(-1)
+                    .First(),
+                StringComparer.Ordinal);
+
+        var repeatable = RequestNameDeclarations.Count(rendered)
+            .Where(entry => entry.Value > 1
+                && loopCounts.GetValueOrDefault(entry.Key) >= entry.Value
+                && IsWrittenAtMostOncePerLoopAndOnlyInLoops(innermostLoopsOfLiteralDeclarations[entry.Key]))
+            .Select(entry => entry.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return new TemplatedRequestNames(repeatable, loopCounts.Keys.ToHashSet(StringComparer.Ordinal));
+    }
+
+    private static bool IsWrittenAtMostOncePerLoopAndOnlyInLoops(IEnumerable<int> innermostLoopIndices)
+    {
+        var indices = innermostLoopIndices.ToList();
+        return indices.Count > 0 && !indices.Contains(-1) && indices.Distinct().Count() == indices.Count;
     }
 
     private void WarnAboutUnsupportedTagDelimiter(string content, string filePath)
@@ -189,14 +220,18 @@ internal sealed partial class TemplateExpander(
 
     private static IFluidTemplate WrapTopLevelLoops(
         IFluidTemplate template, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<int> topLevelIndices,
-        int?[] requestCounts, string filePath)
+        int?[] requestCounts, List<string> loopOutputs, string filePath)
     {
         try
         {
             return TopLevelLoopWrapper.Wrap(
                 template,
                 topLevelIndices.Select(i => blocks[i].LoopVariableName).ToList(),
-                (loopIndex, output) => requestCounts[topLevelIndices[loopIndex]] = CountRequests(output));
+                (loopIndex, output) =>
+                {
+                    requestCounts[topLevelIndices[loopIndex]] = CountRequests(output);
+                    loopOutputs.Add(output);
+                });
         }
         catch (InvalidOperationException ex)
         {

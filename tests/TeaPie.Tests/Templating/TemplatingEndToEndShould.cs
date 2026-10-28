@@ -29,7 +29,7 @@ public partial class TemplatingEndToEndShould
             }
 
             filesWithoutFluidTags++;
-            var expanded = expander.Expand(original, file);
+            var expanded = expander.Expand(original, file).Content;
             expanded.Should().Be(original, $"file '{file}' does not contain '{{%' and must be returned unchanged");
         }
 

@@ -17,7 +17,7 @@ public class ExpandTemplatesStepShould
 
         var expander = Substitute.For<ITemplateExpander>();
         expander.Expand("{% for x in Xs %}BODY{% endfor %}", context.TestCase.RequestsFile.RelativePath)
-            .Returns("EXPANDED");
+            .Returns(new TemplateExpansionResult("EXPANDED", TemplatedRequestNames.None));
 
         var accessor = new TestCaseExecutionContextAccessor { Context = context };
         var step = new ExpandTemplatesStep(accessor, expander);
@@ -36,7 +36,7 @@ public class ExpandTemplatesStepShould
 
         var expander = Substitute.For<ITemplateExpander>();
         expander.Expand("{% for x in Xs %}BODY{% endfor %}", context.TestCase.RequestsFile.RelativePath)
-            .Returns("EXPANDED");
+            .Returns(new TemplateExpansionResult("EXPANDED", TemplatedRequestNames.None));
 
         var accessor = new TestCaseExecutionContextAccessor { Context = context };
         var step = new ExpandTemplatesStep(accessor, expander);
@@ -66,7 +66,8 @@ public class ExpandTemplatesStepShould
         context.RequestsFileContent = content;
 
         var expander = Substitute.For<ITemplateExpander>();
-        expander.Expand(content, Arg.Any<string>()).Returns(content);
+        expander.Expand(content, Arg.Any<string>())
+            .Returns(new TemplateExpansionResult(content, TemplatedRequestNames.None));
 
         var accessor = new TestCaseExecutionContextAccessor { Context = context };
         var step = new ExpandTemplatesStep(accessor, expander);

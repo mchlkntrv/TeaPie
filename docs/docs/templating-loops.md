@@ -168,13 +168,27 @@ This pattern stores each company's id under `Temp.Attachments.CompanyId_1`, `Tem
 
 ## Naming Requests Inside a Loop
 
-If you name a request with `# @name CreatePartner`, **every** iteration produces a request with that same literal name. TeaPie logs a warning for this (naming the file, the duplicated name, and how many requests share it) but does not fail the run — only the last-registered request remains resolvable by that name. This tolerance applies only to templated files (see [How It Fits the Pipeline](#how-it-fits-the-pipeline)). In a file without templates, a duplicate `# @name` remains an error, as before. Always include `{{ forloop.index }}` (or another per-iteration value) in the name to keep it unique:
+Request names must be unique after expansion. A duplicate `# @name` is an error, as in a file without templates, with a single exception: a name that only loops repeat.
+
+If you name a request with `# @name CreatePartner`, **every** iteration produces a request with that same literal name. TeaPie logs a warning for this (naming the file, the duplicated name, and how many requests share it) but does not fail the run — only the last-registered request remains resolvable by that name. Always include `{{ forloop.index }}` (or another per-iteration value) in the name to keep it unique:
 
 ```http
 # @name CreatePartner{{ forloop.index }}
 ```
 
-The same warning fires for duplicate names arising between a plain request and a loop-produced one, or across multiple loops in the same file — not just within a single loop.
+A repeated name is only a warning when it is written literally (without `{{ }}`), only inside `{% for %}` loops, and at most once in each loop body. This also covers nested loops and several loops that each declare the name once. Every other duplicate fails the run when the second request with that name is reached:
+
+| Duplicate | Result |
+| --- | --- |
+| `# @name Login` once in a loop body (also a nested loop, or an `{% if %}` that skips some iterations) | Warning |
+| `# @name Login` once in each of several loops | Warning |
+| Two requests named `Login` outside loops | Error |
+| A request named `Login` outside loops, and a loop that also generates `Login` | Error |
+| `# @name Login` twice in the same loop body | Error |
+| `# @name Login{{ forloop.index }}` twice in the same loop body (both produce `Login1`, `Login2`, ...) | Error |
+| `# @name Login` in both branches of `{% if %}...{% else %}` | No duplicate — only one branch is rendered |
+
+When the duplicated name also comes from a loop, the error suggests including `{{ forloop.index }}` in the name or renaming the other requests.
 
 ## Multiple Loops in One File
 
@@ -265,7 +279,7 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Nested `{% for %}` loops | Supported — see [Multiple Loops in One File](#multiple-loops-in-one-file); a nesting-root loop's combined request count (across all its nesting levels) is what counts against the 1000-request limit above |
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
 | Rendering the file requires more than **200 000** Fluid evaluation steps (e.g. many `{{ }}`/`{% %}` expressions repeated across items) | Error suggesting the file be checked for repeated expressions or split into smaller loops — this is separate from, and on top of, the 1000-request cap |
-| Two or more requests in a templated file share the same `# @name` after expansion | Warning (not an error; in a file without templates it stays an error) — see [Naming Requests Inside a Loop](#naming-requests-inside-a-loop) |
+| Two or more requests share the same `# @name` after expansion | Error, except for a name written literally only inside loops and at most once per loop body, which is a warning — see [Naming Requests Inside a Loop](#naming-requests-inside-a-loop) |
 | An inner loop's collection is empty for every outer item, so it generated no requests | Warning (not an error) — see [Empty Inner Collections](#empty-inner-collections) |
 | A loop whose body declares requests generated none (e.g. `offset:` past the end, `limit: 0`, or an `{% if %}` that excluded every item) | Warning (not an error), naming the loop and the file. A loop placed inside a request body (e.g. building a JSON array) declares no requests and is not checked |
 

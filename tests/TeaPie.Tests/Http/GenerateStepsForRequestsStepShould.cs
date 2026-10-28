@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using TeaPie.Http;
 using TeaPie.Pipelines;
 using TeaPie.Templating;
 using TeaPie.TestCases;
@@ -53,6 +54,103 @@ public class GenerateStepsForRequestsStepShould
         CountDuplicateNameWarnings(logger).Should().Be(expectWarning ? 1 : 0);
     }
 
+    public enum DuplicateNameOutcome
+    {
+        None,
+        Warning,
+        Error,
+        ErrorWithLoopHint
+    }
+
+    public static TheoryData<string, string, DuplicateNameOutcome> DuplicateNamesInTemplatedFiles => new()
+    {
+        {
+            "{% for i in (1..3) %}" + Request("login", "{{ i }}") + "{% endfor %}",
+            "login", DuplicateNameOutcome.Warning
+        },
+        {
+            "{% for i in (1..2) %}{% for j in (1..2) %}" + Request("login", "{{ i }}/{{ j }}") +
+            "{% endfor %}{% endfor %}",
+            "login", DuplicateNameOutcome.Warning
+        },
+        {
+            "{% for i in (1..3) %}{% if i != 2 %}" + Request("login", "{{ i }}") + "{% endif %}{% endfor %}",
+            "login", DuplicateNameOutcome.Warning
+        },
+        {
+            "{% for i in (1..2) %}" + Request("login", "a/{{ i }}") + "{% endfor %}" +
+            "{% for i in (1..2) %}" + Request("login", "b/{{ i }}") + "{% endfor %}",
+            "login", DuplicateNameOutcome.Warning
+        },
+        {
+            "{% for i in (1..2) %}" + Request("login", "{{ i }}") +
+            "{% for j in (1..2) %}" + Request("login", "{{ i }}/{{ j }}") + "{% endfor %}{% endfor %}",
+            "login", DuplicateNameOutcome.Warning
+        },
+        {
+            "{% for i in (1..2) %}" + Request("item{{ forloop.index }}", "{{ i }}") + "{% endfor %}" +
+            Request("login", "a") + Request("login", "b"),
+            "login", DuplicateNameOutcome.Error
+        },
+        {
+            "{% if true %}" + Request("login", "a") + "{% endif %}" + Request("login", "b"),
+            "login", DuplicateNameOutcome.Error
+        },
+        {
+            Request("login", "a") + "{% for i in (1..3) %}" + Request("login", "{{ i }}") + "{% endfor %}",
+            "login", DuplicateNameOutcome.ErrorWithLoopHint
+        },
+        {
+            "{% for i in (1..3) %}" + Request("login", "{{ i }}") + "{% endfor %}" +
+            Request("login", "a") + Request("login", "b"),
+            "login", DuplicateNameOutcome.ErrorWithLoopHint
+        },
+        {
+            "{% for i in (1..3) %}" + Request("login", "{{ i }}") + Request("login", "profile/{{ i }}") +
+            "{% endfor %}",
+            "login", DuplicateNameOutcome.ErrorWithLoopHint
+        },
+        {
+            "{% for i in (1..2) %}" + Request("login{{ forloop.index }}", "{{ i }}") +
+            Request("login{{ forloop.index }}", "profile/{{ i }}") + "{% endfor %}",
+            "login1", DuplicateNameOutcome.ErrorWithLoopHint
+        },
+        {
+            "{% if false %}" + Request("login", "v2") + "{% else %}" + Request("login", "v1") + "{% endif %}",
+            "login", DuplicateNameOutcome.None
+        }
+    };
+
+    [Theory]
+    [MemberData(nameof(DuplicateNamesInTemplatedFiles))]
+    public async Task RejectADuplicateRequestNameUnlessOnlyLoopsRepeatIt(
+        string content, string name, DuplicateNameOutcome expectedOutcome)
+    {
+        var (_, appContext, insertedSteps, logger) = await ExpandAndGenerateStepsForContent(content);
+
+        var parseAllRequests = async () =>
+        {
+            foreach (var step in insertedSteps.OfType<ParseHttpRequestStep>())
+            {
+                await step.Execute(appContext);
+            }
+        };
+
+        if (expectedOutcome is DuplicateNameOutcome.Error or DuplicateNameOutcome.ErrorWithLoopHint)
+        {
+            var exception = (await parseAllRequests.Should().ThrowAsync<InvalidOperationException>()).Which;
+            exception.Message.Should().Contain($"more than one request named '{name}' after template expansion");
+            exception.Message.Contains("{{ forloop.index }}", StringComparison.Ordinal).Should()
+                .Be(expectedOutcome is DuplicateNameOutcome.ErrorWithLoopHint);
+        }
+        else
+        {
+            await parseAllRequests.Should().NotThrowAsync();
+        }
+
+        CountDuplicateNameWarnings(logger, name).Should().Be(expectedOutcome is DuplicateNameOutcome.Warning ? 1 : 0);
+    }
+
     [Fact]
     public async Task KeepRejectingDuplicateNamesInAFileWithoutTemplates()
     {
@@ -63,16 +161,19 @@ public class GenerateStepsForRequestsStepShould
         var (context, appContext, insertedSteps, logger) = await ExpandAndGenerateStepsForContent(content);
 
         CountDuplicateNameWarnings(logger).Should().Be(0);
-        context.AllowsDuplicateRequestNames.Should().BeFalse();
+        context.TemplatedRequestNames.Should().BeNull();
         await insertedSteps[0].Execute(appContext);
         var registerSecond = () => insertedSteps[3].Execute(appContext);
         await registerSecond.Should().ThrowAsync<ArgumentException>();
     }
 
-    private static int CountDuplicateNameWarnings(ILogger<ApplicationContext> logger)
+    private static string Request(string name, string path)
+        => $"### Request\n# @name {name}\nPOST https://example.com/{path}\n\n";
+
+    private static int CountDuplicateNameWarnings(ILogger<ApplicationContext> logger, string name = "CreatePartner")
         => logger.ReceivedCalls().Count(call =>
             call.GetArguments()[0] is LogLevel.Warning
-            && call.GetArguments()[2]?.ToString()?.Contains("requests named 'CreatePartner'") == true);
+            && call.GetArguments()[2]?.ToString()?.Contains($"requests named '{name}'") == true);
 
     private static Task<(TestCaseExecutionContext Context, ApplicationContext AppContext,
         IPipelineStep[] InsertedSteps, ILogger<ApplicationContext> Logger)> ExpandAndGenerateSteps(string requestName)

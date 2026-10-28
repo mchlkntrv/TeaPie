@@ -46,7 +46,7 @@ Usable anywhere in the loop body, including inside `# @name` declarations — ex
 
 ## Naming Requests Inside a Loop
 
-Always include `{{ forloop.index }}` (or another per-iteration value) in `# @name`, otherwise every iteration shares one name — the last-registered request wins and TeaPie logs a warning (not a failure). In nested loops, combine the outer and inner index (see the example below). Names of requests outside loops must also be unique and must not match any name a loop generates: in a templated file such a collision is only a warning, so it can go unnoticed. Because names differ per iteration, a later request referencing an iteration's response needs `forloop.index` combined with the `prepend`/`append` filters, e.g. `{{ forloop.index | prepend: "Temp.Attachments.CompanyId_" }}`, to build the variable reference dynamically.
+Always include `{{ forloop.index }}` (or another per-iteration value) in `# @name`, otherwise every iteration shares one name — the last-registered request wins and TeaPie logs a warning (not a failure). In nested loops, combine the outer and inner index (see the example below). Every other duplicate fails the run: two requests with the same name outside loops, a name outside loops that a loop also generates, the same name written twice in one loop body (also `Name{{ forloop.index }}` written twice). A repeated name is only a warning when it is written literally, only inside loops and at most once per loop body. Because names differ per iteration, a later request referencing an iteration's response needs `forloop.index` combined with the `prepend`/`append` filters, e.g. `{{ forloop.index | prepend: "Temp.Attachments.CompanyId_" }}`, to build the variable reference dynamically.
 
 ## Nested Loops
 
@@ -86,7 +86,7 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Missing `{% endfor %}`, a stray `{% endfor %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag |
 | A filter in a loop source, or an unknown/duplicated loop option | Error listing the supported loop options |
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
-| Two or more requests in a templated file share the same `# @name` after expansion | Warning, not an error (last one wins); in a file without templates it stays an error |
+| Two or more requests share the same `# @name` after expansion | Error, except for a name written literally only inside loops and at most once per loop body: warning (last one wins) |
 | An inner loop's collection is empty for **every** outer item (it generated no requests at all) | Warning, not an error |
 | A loop whose body declares requests generated none (`offset:` past the end, `limit: 0`, an `{% if %}` excluding every item) | Warning, not an error |
 

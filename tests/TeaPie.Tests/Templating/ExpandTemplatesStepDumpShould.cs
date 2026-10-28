@@ -113,7 +113,8 @@ public class ExpandTemplatesStepDumpShould : IDisposable
 
         var expander = Substitute.For<ITemplateExpander>();
         expander.Expand(content, context.TestCase.RequestsFile.RelativePath)
-            .Returns(content.Contains("{%") ? ExpandedContent : content);
+            .Returns(new TemplateExpansionResult(
+                content.Contains("{%") ? ExpandedContent : content, TemplatedRequestNames.None));
 
         var accessor = new TestCaseExecutionContextAccessor { Context = context };
         return (new ExpandTemplatesStep(accessor, expander), context);
