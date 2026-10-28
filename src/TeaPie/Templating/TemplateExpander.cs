@@ -30,6 +30,20 @@ internal sealed partial class TemplateExpander(
 
     public TemplateExpansionResult Expand(string content, string filePath)
     {
+        try
+        {
+            return ExpandTemplate(content, filePath);
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            throw new InvalidOperationException(
+                $"Templating error in '{filePath}': scanning the file took longer than " +
+                $"{TemplatingLimits.RegexTimeoutMilliseconds} ms. Check it for an unclosed '{{{{', '{{%' or quote.", ex);
+        }
+    }
+
+    private TemplateExpansionResult ExpandTemplate(string content, string filePath)
+    {
         if (!TemplateDetector.ContainsTemplateTag(content))
         {
             WarnAboutUnsupportedTagDelimiter(content, filePath);
@@ -480,9 +494,13 @@ internal sealed partial class TemplateExpander(
             FluidExpressionIdentifier.StartsWithIdentifier(
                 forSources[blockIndex].CollectionExpression, blocks[ancestorIndex].LoopVariableName));
 
-    [GeneratedRegex(HttpFileParserConstants.HttpRequestSeparatorDirectiveLineRegex)]
+    [GeneratedRegex(
+        HttpFileParserConstants.HttpRequestSeparatorDirectiveLineRegex,
+        RegexOptions.None, TemplatingLimits.RegexTimeoutMilliseconds)]
     private static partial Regex RequestSeparatorRegex();
 
-    [GeneratedRegex(HttpFileParserConstants.RequestMethodAndUriLinePattern, RegexOptions.IgnoreCase)]
+    [GeneratedRegex(
+        HttpFileParserConstants.RequestMethodAndUriLinePattern,
+        RegexOptions.IgnoreCase, TemplatingLimits.RegexTimeoutMilliseconds)]
     private static partial Regex RequestMethodAndUriLineRegex();
 }

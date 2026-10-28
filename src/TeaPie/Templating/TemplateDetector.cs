@@ -12,6 +12,6 @@ internal static partial class TemplateDetector
     public static bool ContainsTagDelimiter(string content)
         => content.Contains("{%", StringComparison.Ordinal);
 
-    [GeneratedRegex(@"\{%-?\s*(?:for|if|unless|assign|raw)\b")]
+    [GeneratedRegex(@"\{%-?\s*(?:for|if|unless|assign|raw)\b", RegexOptions.None, TemplatingLimits.RegexTimeoutMilliseconds)]
     private static partial Regex SupportedTagRegex();
 }

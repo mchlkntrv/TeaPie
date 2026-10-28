@@ -135,7 +135,7 @@ report) only ever see the rendered literal name.
 
 ## How Expansion Works (and What It Leaves Alone)
 
-Loop expansion only touches `{{ }}` expressions that reference the loop variable (e.g. `partner`, `i`, `status`) or `forloop`. Every other `{{ }}` expression — TeaPie variables, functions, or named-request references — is left **untouched**, to be resolved later by TeaPie's own variable/function resolution:
+Loop expansion only touches `{{ }}` expressions that reference the loop variable (e.g. `partner`, `i`, `status`), `forloop` or a name set by `{% assign %}` — anywhere in the expression, so `{{ "p-" | append: partner.Id }}` and `{{ 1 | plus: forloop.index }}` are rendered too. Such an expression is rendered as a whole by Fluid, so any other name in it must be a non-secret TeaPie variable. Every other `{{ }}` expression — TeaPie variables, functions, or named-request references — is left **untouched**, to be resolved later by TeaPie's own variable/function resolution:
 
 ```http
 Input (inside the loop):
@@ -281,6 +281,7 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Nested `{% for %}` loops | Supported — see [Multiple Loops in One File](#multiple-loops-in-one-file); a nesting-root loop's combined request count (across all its nesting levels) is what counts against the 1000-request limit above |
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
 | Rendering the file requires more than **200 000** Fluid evaluation steps (e.g. many `{{ }}`/`{% %}` expressions repeated across items) | Error suggesting the file be checked for repeated expressions or split into smaller loops — this is separate from, and on top of, the 1000-request cap |
+| Scanning the file for template syntax takes longer than **1 second** in one step (e.g. an extremely long line after an unclosed `{%`) | Error asking to check the file for an unclosed `{{`, `{%` or quote, instead of the run hanging |
 | Two or more requests share the same `# @name` after expansion | Error, except for a name written literally only inside loops and at most once per loop body, which is a warning — see [Naming Requests Inside a Loop](#naming-requests-inside-a-loop) |
 | An inner loop's collection is empty for every outer item, so it generated no requests | Warning (not an error) — see [Empty Inner Collections](#empty-inner-collections) |
 | A loop whose body declares requests generated none (e.g. `offset:` past the end, `limit: 0`, or an `{% if %}` that excluded every item) | Warning (not an error), naming the loop and the file. A loop placed inside a request body (e.g. building a JSON array) declares no requests and is not checked |

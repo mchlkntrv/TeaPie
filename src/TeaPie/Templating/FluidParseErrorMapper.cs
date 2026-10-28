@@ -100,6 +100,7 @@ internal static partial class FluidParseErrorMapper
         return line.TrimEnd('\r');
     }
 
-    [GeneratedRegex(FluidMessageFormats.ParseErrorPositionPattern, RegexOptions.Singleline)]
+    [GeneratedRegex(
+        FluidMessageFormats.ParseErrorPositionPattern, RegexOptions.Singleline, TemplatingLimits.RegexTimeoutMilliseconds)]
     private static partial Regex PositionRegex();
 }

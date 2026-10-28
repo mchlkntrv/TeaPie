@@ -74,15 +74,19 @@ internal sealed partial class LoopBlockScanner : ILoopBlockScanner
     private static bool IsWithinAnyRange(int index, MatchCollection ranges)
         => ranges.Any(range => index >= range.Index && index < range.Index + range.Length);
 
-    [GeneratedRegex(@"\{%(-)?\s*for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+((?:""[^""]*""|'[^']*'|[^""'\n])+?)\s*(-)?%\}")]
+    [GeneratedRegex(
+        @"\{%(-)?\s*for\s+(" + FluidExpressionIdentifier.Pattern + @")\s+in\s+((?:""[^""]*""|'[^']*'|[^""'\n])+?)\s*(-)?%\}",
+        RegexOptions.None, TemplatingLimits.RegexTimeoutMilliseconds)]
     private static partial Regex ForTagRegex();
 
-    [GeneratedRegex(@"\{%(-)?\s*endfor\s*(-)?%\}")]
+    [GeneratedRegex(@"\{%(-)?\s*endfor\s*(-)?%\}", RegexOptions.None, TemplatingLimits.RegexTimeoutMilliseconds)]
     private static partial Regex EndForTagRegex();
 
-    [GeneratedRegex(@"\{%-?\s*(for|endfor)\b[^%]*-?%\}")]
+    [GeneratedRegex(@"\{%-?\s*(for|endfor)\b[^%]*-?%\}", RegexOptions.None, TemplatingLimits.RegexTimeoutMilliseconds)]
     private static partial Regex ForTagFamilyRegex();
 
-    [GeneratedRegex(@"\{%-?\s*(raw|comment)\s*-?%\}.*?\{%-?\s*end\1\s*-?%\}", RegexOptions.Singleline)]
+    [GeneratedRegex(
+        @"\{%-?\s*(raw|comment)\s*-?%\}.*?\{%-?\s*end\1\s*-?%\}",
+        RegexOptions.Singleline, TemplatingLimits.RegexTimeoutMilliseconds)]
     private static partial Regex LiteralBlockRegex();
 }

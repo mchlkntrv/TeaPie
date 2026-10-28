@@ -17,6 +17,8 @@ public class LoopBodyMaskerShould
         "{% endfor %}")]
     [InlineData("{% for o in Outers %}{% assign label = o.Name %}{% for i in o.Items %}{{ o.Name }}{{ i.Value }}" +
         "{{ label }}{{ forloop.index }}{% endfor %}{% endfor %}")]
+    [InlineData("{% for t in Items %}{{ \"p-\" | append: t }}{{ 1 | plus: forloop.index }}{{ X | default: t.Name }}" +
+        "{{ L[t] }}{{- t -}}{{-t-}}{% endfor %}")]
     public void LeaveTokensBoundByALoopOrAssignUnmasked(string content)
         => ApplyMask(content).Should().Be(content);
 
@@ -29,6 +31,12 @@ public class LoopBodyMaskerShould
         "{% for t in Items %}{% if t.Name == \"Acme\" %}<{{ApiGatewayBaseUrl}}>{% endif %}{% endfor %}")]
     [InlineData("{% for t in Items %}{% assign greeting = \"Hi\" %}{{ greeting }}{{greetingX}}{% endfor %}",
         "{% for t in Items %}{% assign greeting = \"Hi\" %}{{ greeting }}<{{greetingX}}>{% endfor %}")]
+    [InlineData("{% for t in Items %}{% assign my-x = t %}{{ my-x }}{{ my-xy }}{{ my }}{{ t-x }}{% endfor %}",
+        "{% for t in Items %}{% assign my-x = t %}{{ my-x }}<{{ my-xy }}><{{ my }}><{{ t-x }}>{% endfor %}")]
+    [InlineData("{% for t in Items %}{{ X.t }}{{ X | t }}{{ X | f: t: 1 }}{{ X | append: \"t\" }}{{$f t}}" +
+        "{{A.response.body.$..t}}{{A.response.body.//t}}{% endfor %}",
+        "{% for t in Items %}<{{ X.t }}><{{ X | t }}><{{ X | f: t: 1 }}><{{ X | append: \"t\" }}><{{$f t}}>" +
+        "<{{A.response.body.$..t}}><{{A.response.body.//t}}>{% endfor %}")]
     [InlineData("{% for t in Items %}{% raw %}{{ t.Name }}{% endraw %}{{ApiGatewayBaseUrl}}{% endfor %}",
         "{% for t in Items %}{% raw %}{{ t.Name }}{% endraw %}<{{ApiGatewayBaseUrl}}>{% endfor %}")]
     [InlineData("{% for t in Items %}{% raw %}{% assign greeting = \"Hi\" %}{% endraw %}{{ greeting }}{% endfor %}",
@@ -51,6 +59,19 @@ public class LoopBodyMaskerShould
         "{% endfor %}")]
     public void WrapTokensOutsideAnyLoopOrAssignScopeInARawBlock(string content, string expected)
         => ApplyMask(content).Should().Be(expected.Replace("<{{", "{% raw %}{{").Replace("}}>", "}}{% endraw %}"));
+
+    [Fact]
+    public void FinishQuicklyWhenAFunctionTokenIsNotClosed()
+    {
+        var items = string.Join(", ", Enumerable.Range(0, 200).Select(i => $"\"item{i}\""));
+        var content = "{% for t in Items %}\nX-Corr: {{$guid\n\n[" + items + "]\n{% endfor %}";
+        string? masked = null;
+
+        Action act = () => masked = ApplyMask(content);
+
+        act.ExecutionTime().Should().BeLessThan(TimeSpan.FromSeconds(1));
+        masked.Should().Be(content);
+    }
 
     private static string ApplyMask(string content)
     {

@@ -44,6 +44,8 @@ Property access is `{{ item.PropertyName }}` and is **case-sensitive**. Dotted v
 
 Usable anywhere in the loop body, including inside `# @name` declarations — expansion happens before request names are parsed.
 
+A `{{ }}` expression is rendered during expansion when it references the loop variable, `forloop` or an `{% assign %}` name anywhere in it (e.g. `{{ "p-" | append: partner.Id }}`); any other name in such an expression must be a non-secret TeaPie variable. Every other `{{ }}` (`{{ApiBaseUrl}}`, `{{$guid}}`, request references) is left for TeaPie to resolve after expansion.
+
 ## Naming Requests Inside a Loop
 
 Always include `{{ forloop.index }}` (or another per-iteration value) in `# @name`, otherwise every iteration shares one name — the last-registered request wins and TeaPie logs a warning (not a failure). In nested loops, combine the outer and inner index (see the example below). Every other duplicate fails the run: two requests with the same name outside loops, a name outside loops that a loop also generates, the same name written twice in one loop body (also `Name{{ forloop.index }}` written twice). A repeated name is only a warning when it is written literally, only inside loops and at most once per loop body. Because names differ per iteration, a later request referencing an iteration's response needs `forloop.index` combined with the `prepend`/`append` filters, e.g. `{{ forloop.index | prepend: "Temp.Attachments.CompanyId_" }}`, to build the variable reference dynamically.
@@ -84,6 +86,7 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Loop would expand to more than **1000** requests | Error |
 | Rendering needs more than **200 000** Fluid evaluation steps (too many `{{ }}`/`{% %}` expressions across items) | Error — separate from, and on top of, the 1000-request cap |
 | Missing `{% endfor %}`, a stray `{% endfor %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag |
+| Scanning the file for template syntax takes longer than **1 s** in one step (e.g. a very long line after an unclosed `{%`) | Error suggesting to check for an unclosed `{{`, `{%` or quote |
 | A filter in a loop source, or an unknown/duplicated loop option | Error listing the supported loop options |
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
 | Two or more requests share the same `# @name` after expansion | Error, except for a name written literally only inside loops and at most once per loop body: warning (last one wins) |

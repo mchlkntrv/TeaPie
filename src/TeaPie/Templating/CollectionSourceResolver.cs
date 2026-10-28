@@ -151,6 +151,6 @@ internal sealed partial class CollectionSourceResolver(IVariables variables) : I
             "or boolean. Use a double-quoted string (\"value\"), a number, or a lowercase boolean (true/false).");
     }
 
-    [GeneratedRegex(@"^\(\s*(\d+)\s*\.\.\s*(\d+)\s*\)$")]
+    [GeneratedRegex(@"^\(\s*(\d+)\s*\.\.\s*(\d+)\s*\)$", RegexOptions.None, TemplatingLimits.RegexTimeoutMilliseconds)]
     private static partial Regex NumericRangeRegex();
 }

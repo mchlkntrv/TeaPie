@@ -39,6 +39,7 @@ internal static partial class RequestNameDeclarations
             .GroupBy(declaration => declaration.Name, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
 
-    [GeneratedRegex(HttpFileParserConstants.RequestNameMetadataPattern)]
+    [GeneratedRegex(
+        HttpFileParserConstants.RequestNameMetadataPattern, RegexOptions.None, TemplatingLimits.RegexTimeoutMilliseconds)]
     private static partial Regex RequestNameRegex();
 }

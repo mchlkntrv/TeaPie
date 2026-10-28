@@ -119,6 +119,9 @@ public class TemplateExpanderShould
         "Acme={{ t.Name }}{{ApiGatewayBaseUrl}};Globex={{ t.Name }}{{ApiGatewayBaseUrl}};")]
     [InlineData("{% for i in (1..1) %}{% assign url = \"{{ApiGatewayBaseUrl}}\" %}{{ url }}{% endfor %}",
         "{{ApiGatewayBaseUrl}}")]
+    [InlineData("{% for t in Tenants %}{{{ t.Name }}}{{{ApiGatewayBaseUrl}}}{{{{$guid}}}};{% endfor %}",
+        "{Acme}{{{ApiGatewayBaseUrl}}}{{{{$guid}}}};{Globex}{{{ApiGatewayBaseUrl}}}{{{{$guid}}}};")]
+    [InlineData("{% for t in Tenants %}{{ \"p-\" | append: t.Name }}|{{- t.Name -}};{% endfor %}", "p-Acme|Acme;p-Globex|Globex;")]
     public void PreserveTeaPieSyntaxInsideLoopBodies(string content, string expected)
         => Expand(content).Should().Be(expected);
 
@@ -128,6 +131,7 @@ public class TemplateExpanderShould
     [InlineData("{% for i in (1..3) %}{% if forloop.first %}F{% elsif forloop.last %}L{% else %}M{% endif %}{% endfor %}",
         "FML")]
     [InlineData("{% for t in Tenants %}{% unless t.Name == 'Acme' %}N{% else %}Y{% endunless %}{% endfor %}", "YN")]
+    [InlineData("{% for t in Tenants %}{{% if t.Name == 'Acme' %}\"a\":1{% endif %}};{% endfor %}", "{\"a\":1};{};")]
     [InlineData("{% for t in Tenants %}{% assign g = Greeting %}{{ g }} {{ t.Name }};{% endfor %}", "Hi Acme;Hi Globex;")]
     [InlineData("{% for i in (1..1) %}{% if PartnerCount > 5 %}{% assign s = 'big' %}{% else %}{% assign s = 'small' %}" +
         "{% endif %}{{ s }}{% endfor %}", "big")]
@@ -146,6 +150,8 @@ public class TemplateExpanderShould
         "{% if l != 'A2' %}[{{ ci }}.{{ forloop.index }}]{% endif %}{% endfor %}{% endfor %}", "[1.1][1.3]")]
     [InlineData("{% for c in Companies %}{% for l in c.Licenses %}{{ l }}{% else %}[{{ c.Name }}:none]{% endfor %}" +
         "{% endfor %}", "A1A2A3[Globex:none]")]
+    [InlineData("{% for my-c in Companies %}{% assign my-n = my-c.Name %}{% for l in my-c.Licenses %}[{{ my-n }}:{{ l }}]" +
+        "{% endfor %}{% endfor %}", "[Acme:A1][Acme:A2][Acme:A3]")]
     [InlineData("{% for c in Companies %}{% assign n = c.Name %}{% for g in c.Groups['basic'] %}[{{ n }}:{{ g }}]" +
         "{% endfor %}{% endfor %}", "[Acme:AB][Globex:GB]")]
     [InlineData("{% for c in Companies %}{% for g in c.Groups[GroupKey] %}{{ g }}{% endfor %}{% endfor %}", "ABGB")]
@@ -228,6 +234,18 @@ public class TemplateExpanderShould
         var act = () => Expand(content);
 
         act.Should().Throw<InvalidOperationException>().WithMessage(expectedMessage);
+    }
+
+    [Fact]
+    public void ThrowAClearErrorWhenScanningTheFileTimesOut()
+    {
+        // The '{% for %}' tag pattern is quadratic in the length of a line that never closes the tag.
+        var content = "{% for i in (1..1) %}{{ i }}{% endfor %}\n{% for x in a" + new string(' ', 100_000);
+
+        var act = () => Expand(content);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage($"Templating error in '{FilePath}': scanning the file took longer than*");
     }
 
     public static TheoryData<string> ContentWithinLimits => new()
