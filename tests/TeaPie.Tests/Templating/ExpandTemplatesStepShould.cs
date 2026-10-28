@@ -20,7 +20,7 @@ public class ExpandTemplatesStepShould
             .Returns(new TemplateExpansionResult("EXPANDED", TemplatedRequestNames.None));
 
         var accessor = new TestCaseExecutionContextAccessor { Context = context };
-        var step = new ExpandTemplatesStep(accessor, expander);
+        var step = new ExpandTemplatesStep(accessor, expander, Substitute.For<IExpandedContentDumper>());
 
         var appContext = new ApplicationContextBuilder().WithPath(RequestsIndex.RootFolderFullPath).Build();
         await step.Execute(appContext);
@@ -39,7 +39,7 @@ public class ExpandTemplatesStepShould
             .Returns(new TemplateExpansionResult("EXPANDED", TemplatedRequestNames.None));
 
         var accessor = new TestCaseExecutionContextAccessor { Context = context };
-        var step = new ExpandTemplatesStep(accessor, expander);
+        var step = new ExpandTemplatesStep(accessor, expander, Substitute.For<IExpandedContentDumper>());
 
         var logger = Substitute.For<ILogger<ApplicationContext>>();
         var appContext = new ApplicationContextBuilder()
@@ -70,7 +70,7 @@ public class ExpandTemplatesStepShould
             .Returns(new TemplateExpansionResult(content, TemplatedRequestNames.None));
 
         var accessor = new TestCaseExecutionContextAccessor { Context = context };
-        var step = new ExpandTemplatesStep(accessor, expander);
+        var step = new ExpandTemplatesStep(accessor, expander, Substitute.For<IExpandedContentDumper>());
 
         var logger = Substitute.For<ILogger<ApplicationContext>>();
         var appContext = new ApplicationContextBuilder()
@@ -87,6 +87,41 @@ public class ExpandTemplatesStepShould
             Arg.Any<object>(),
             Arg.Any<Exception?>(),
             Arg.Any<Func<object, Exception?, string>>());
+    }
+
+    [Theory]
+    [InlineData("{% for x in Xs %}BODY{% endfor %}", true, true)]
+    [InlineData("{% for x in Xs %}BODY{% endfor %}", false, false)]
+    [InlineData("GET https://example.test/plain", true, false)]
+    public async Task DumpTheExpandedContentOnlyForATemplatedFileWhenRequested(
+        string content, bool dumpRequested, bool expectedDump)
+    {
+        var context = RequestHelper.PrepareTestCaseContext(RequestsIndex.RequestWithFullStructure, false);
+        context.RequestsFileContent = content;
+
+        var expander = Substitute.For<ITemplateExpander>();
+        expander.Expand(content, Arg.Any<string>())
+            .Returns(new TemplateExpansionResult("EXPANDED", TemplatedRequestNames.None));
+
+        var dumper = Substitute.For<IExpandedContentDumper>();
+        var accessor = new TestCaseExecutionContextAccessor { Context = context };
+        var step = new ExpandTemplatesStep(accessor, expander, dumper);
+
+        var appContextBuilder = new ApplicationContextBuilder().WithPath(RequestsIndex.RootFolderFullPath);
+        if (dumpRequested)
+        {
+            appContextBuilder.WithExpandedContentDump();
+        }
+
+        var appContext = appContextBuilder.Build();
+
+        await step.Execute(appContext);
+
+        dumper.ReceivedCalls().Should().HaveCount(expectedDump ? 1 : 0);
+        if (expectedDump)
+        {
+            dumper.Received(1).Dump(appContext, context.TestCase, "EXPANDED");
+        }
     }
 
     private static bool ContainsExpandedContent(object? state, string expectedContent)

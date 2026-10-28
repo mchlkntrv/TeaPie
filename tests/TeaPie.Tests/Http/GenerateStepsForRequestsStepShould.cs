@@ -209,7 +209,11 @@ public class GenerateStepsForRequestsStepShould
             .WithPath(RequestsIndex.RootFolderFullPath)
             .Build();
 
-        await new ExpandTemplatesStep(accessor, serviceProvider.GetRequiredService<ITemplateExpander>()).Execute(appContext);
+        await new ExpandTemplatesStep(
+                accessor,
+                serviceProvider.GetRequiredService<ITemplateExpander>(),
+                serviceProvider.GetRequiredService<IExpandedContentDumper>())
+            .Execute(appContext);
 
         IPipelineStep[] insertedSteps = [];
         var pipeline = Substitute.For<IPipeline>();

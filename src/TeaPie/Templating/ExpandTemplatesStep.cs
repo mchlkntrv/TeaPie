@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-using Spectre.Console;
 using TeaPie.Pipelines;
 using TeaPie.TestCases;
 
@@ -7,7 +6,8 @@ namespace TeaPie.Templating;
 
 internal sealed class ExpandTemplatesStep(
     ITestCaseExecutionContextAccessor testCaseExecutionContextAccessor,
-    ITemplateExpander templateExpander) : IPipelineStep
+    ITemplateExpander templateExpander,
+    IExpandedContentDumper expandedContentDumper) : IPipelineStep
 {
     public async Task Execute(ApplicationContext context, CancellationToken cancellationToken = default)
     {
@@ -32,52 +32,11 @@ internal sealed class ExpandTemplatesStep(
 
         if (context.DumpExpandedContent)
         {
-            DumpExpandedContent(context, testCaseExecutionContext.TestCase.RequestsFile.RelativePath, expandedContent);
+            expandedContentDumper.Dump(context, testCaseExecutionContext.TestCase, expandedContent);
         }
 
         await Task.CompletedTask;
     }
-
-    private static void DumpExpandedContent(ApplicationContext context, string relativePath, string expandedContent)
-    {
-        if (string.IsNullOrEmpty(context.ExpandedContentDumpPath))
-        {
-            AnsiConsole.Write(new Rule($"[grey]Expanded: {relativePath.EscapeMarkup()}[/]").LeftJustified());
-            AnsiConsole.Write(new Text(expandedContent));
-            AnsiConsole.WriteLine();
-            return;
-        }
-
-        var dumpFilePath = Path.Combine(context.ExpandedContentDumpPath, ToRequestFilePath(relativePath));
-        EnsureOutsideOfTestedCollection(context.Path, dumpFilePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(dumpFilePath)!);
-        System.IO.File.WriteAllText(dumpFilePath, expandedContent);
-
-        context.Logger.LogInformation(
-            "Expanded content of the requests file at '{Path}' was written to '{DumpFilePath}'.",
-            relativePath,
-            dumpFilePath);
-    }
-
-    private static void EnsureOutsideOfTestedCollection(string testedPath, string dumpFilePath)
-    {
-        var collectionPath = Directory.Exists(testedPath) ? testedPath : Path.GetDirectoryName(testedPath)!;
-        var collectionPrefix = Path.GetFullPath(collectionPath)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-
-        if (Path.GetFullPath(dumpFilePath).StartsWith(collectionPrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                $"Expanded content cannot be written to '{dumpFilePath}', because it is inside the tested collection " +
-                $"'{collectionPath}' (it could overwrite a requests file or be run as an extra test case). Choose a " +
-                "dump directory outside of the collection.");
-        }
-    }
-
-    private static string ToRequestFilePath(string relativePath)
-        => Path.GetExtension(relativePath).Equals(Constants.RequestFileExtension, StringComparison.OrdinalIgnoreCase)
-            ? relativePath
-            : relativePath + Constants.RequestFileExtension;
 
     private static void LogExpansionResult(
         ApplicationContext context, TestCaseExecutionContext testCaseExecutionContext, string originalContent,
