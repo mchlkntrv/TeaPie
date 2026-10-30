@@ -1,6 +1,9 @@
 ﻿namespace TeaPie.Templating;
 
-internal sealed record TemplateExpansionResult(string Content, TemplatedRequestNames RequestNames);
+internal sealed record TemplateExpansionResult(string Content, TemplatedRequestNames RequestNames)
+{
+    public IReadOnlyDictionary<string, string> DataValues { get; init; } = TemplateDataValues.None;
+}
 
 internal sealed record TemplatedRequestNames(IReadOnlySet<string> Repeatable, IReadOnlySet<string> GeneratedByLoops)
 {

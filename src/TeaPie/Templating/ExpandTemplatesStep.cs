@@ -26,6 +26,7 @@ internal sealed class ExpandTemplatesStep(
         }
 
         testCaseExecutionContext.TemplatedRequestNames = expansion.RequestNames;
+        testCaseExecutionContext.TemplateDataValues = expansion.DataValues;
 
         LogExpansionResult(context, testCaseExecutionContext, content, expandedContent);
         LogExpandedContent(context, testCaseExecutionContext, expandedContent);

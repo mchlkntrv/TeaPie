@@ -149,9 +149,33 @@ X-Trace-Id: {{$guid}}
 
 `{{ApiBaseUrl}}` and `{{$guid}}` are resolved normally, after expansion, exactly as in a request file without any loop.
 
+### Values From Data Stay Data
+
+Expansion runs before the file is split into requests and before TeaPie resolves its variables. A rendered value that contains a line break or `###` would therefore change the file itself — add a request or a header, or cut a request short — and a value with `{{` or `}}` would pull in another variable, a secret one included. Such a value is not written into the file. The expansion writes a reference such as `{{__teapie_value_1}}` instead, and TeaPie puts the value in place of it when it resolves the request's variables, exactly as it does with `{{variable}}` in a file without templates:
+
+```http
+Input (inside the loop, partner.Note = "first line\nsecond line"):
+POST {{ApiBaseUrl}}/partners/{{ partner.Id }}/notes
+Content-Type: text/plain
+
+{{ partner.Note }}
+
+After expansion:
+POST {{ApiBaseUrl}}/partners/7/notes
+Content-Type: text/plain
+
+{{__teapie_value_1}}
+```
+
+The request is sent with both lines of the note in its body. A value such as `{{apiKey}}` coming from data is sent as this literal text, not as the value of `apiKey`.
+
+- The check applies to the result of each `{{ }}` expression, after its filters. Filters and conditions work with the real value, so `{{ partner.Note | json }}` writes `"first line\nsecond line"` into a JSON body as it did before, and `| url_encode` or `| strip_newlines` leave nothing to replace.
+- `{{` and `}}` are written into the file only when they are written as text in that same expression, as in the pattern in the next section. Text that only reaches the expression through a variable — an item of an inline list `("{{Url1}}")` or a value of `{% assign url = "{{Url1}}" %}` — is sent as literal text. Build such a reference in the expression itself: `{{ name | prepend: "{{" | append: "}}" }}`.
+- `--dump-expanded` and the Trace log show the reference, not the value.
+
 ### Advanced: Referencing an Expanded Request by Name
 
-Because request names differ per iteration (`CreatePartner1`, `CreatePartner2`, ...), a later request cannot reference a fixed name like `{{CreatePartner.response...}}`. Combine `forloop.index` with the `prepend`/`append` filters to build the reference dynamically:
+Because request names differ per iteration (`CreatePartner1`, `CreatePartner2`, ...), a later request cannot reference a fixed name like `{{CreatePartner.response...}}`. Combine `forloop.index` with the `prepend`/`append` filters to build the reference dynamically. The `{{` and `}}` must be written in this same expression (see [Values From Data Stay Data](#values-from-data-stay-data)):
 
 ```http
 {% for tenant in Tenants %}
@@ -329,6 +353,8 @@ teapie test ./Tests --dump-expanded-dir ../expanded     # write each expanded fi
 The dump directory must be **outside** the tested collection. A dumped `-req.http` file inside the collection could overwrite the original template, or be picked up as an extra test case by the next run. TeaPie therefore checks the dump directory before the first test case runs and stops with an error instead of writing it there. When testing a single file, only that file's folder counts as the collection. Keep the dump directory outside of any folder you later run as a collection.
 
 If the expansion of a file fails, nothing is dumped for it. The error names the file and the tag that caused it.
+
+A rendered value with a line break, `###`, `{{` or `}}` appears in the dump as a reference such as `{{__teapie_value_1}}` (see [Values From Data Stay Data](#values-from-data-stay-data)), so a dumped file can't be run on its own.
 
 Only files that contain templates are dumped, after their `-init.csx` script has run, so the output matches what is actually executed. The requests are still sent as usual — the dump is a by-product of a normal run (expansion depends on variables set by scripts and earlier requests, so it can't be produced without running them). A `.tp` file is written with an extra `.http` extension (e.g. `seed.tp.http`), since only its request part is expanded. When the `.tp` file holds named test cases (`--- TESTCASE <Name>`), each of them is written separately with its name in the file name (e.g. `seed.tp.First.http` and `seed.tp.Second.http`), and the console header shows it as `seed.tp (First)`. Characters that a file name can't contain are replaced with `_`.
 

@@ -117,8 +117,6 @@ public class TemplateExpanderShould
         "{{$guid}}{{$randomInt 1 100}}{{$add {{X}} 1}}{{$add {{Y}} 1}}:1")]
     [InlineData("{% for t in Tenants %}{{ t.Name }}={% raw %}{{ t.Name }}{{ApiGatewayBaseUrl}}{% endraw %};{% endfor %}",
         "Acme={{ t.Name }}{{ApiGatewayBaseUrl}};Globex={{ t.Name }}{{ApiGatewayBaseUrl}};")]
-    [InlineData("{% for i in (1..1) %}{% assign url = \"{{ApiGatewayBaseUrl}}\" %}{{ url }}{% endfor %}",
-        "{{ApiGatewayBaseUrl}}")]
     [InlineData("{% for t in Tenants %}{{{ t.Name }}}{{{ApiGatewayBaseUrl}}}{{{{$guid}}}};{% endfor %}",
         "{Acme}{{{ApiGatewayBaseUrl}}}{{{{$guid}}}};{Globex}{{{ApiGatewayBaseUrl}}}{{{{$guid}}}};")]
     [InlineData("{% for t in Tenants %}{{ \"p-\" | append: t.Name }}|{{- t.Name -}};{% endfor %}", "p-Acme|Acme;p-Globex|Globex;")]
@@ -313,6 +311,63 @@ public class TemplateExpanderShould
         {
             act.Should().Throw<InvalidOperationException>().WithMessage("*loop over 'Items' would expand to 4 requests*");
         }
+    }
+
+    [Theory]
+    [InlineData("bob\n###\nDELETE https://example.test/injected")]
+    [InlineData("bob\rX-Admin: true")]
+    [InlineData("abc###def")]
+    [InlineData("{{apiKey}}")]
+    [InlineData("}}")]
+    public void ReplaceDataValuesThatWouldChangeTheFileWithAReference(string value)
+    {
+        var variables = CreateVariables();
+        variables.SetVariable("Unsafe", new object[] { new { Name = value } });
+        const string content = "{% for u in Unsafe %}\n###\nGET https://example.test/{{ u.Name }}/{{ u.Name | append: \"!\" }}\n" +
+            "{% assign n = u.Name %}{{ n }}{% capture c %}{{ n }}{% endcapture %}{% assign m = c %}{{ m }}{% echo n %}" +
+            "{% cycle n %}{{ n | raw }}{% endfor %}";
+
+        var result = CreateExpander(variables).Expand(content, FilePath);
+
+        result.Content.Should().Be(
+            "\n###\nGET https://example.test/{{__teapie_value_1}}/{{__teapie_value_2}}\n" +
+            "{{__teapie_value_1}}{{__teapie_value_1}}{{__teapie_value_1}}{{__teapie_value_1}}{{__teapie_value_1}}");
+        result.DataValues.Should().Equal(
+            new Dictionary<string, string> { ["__teapie_value_1"] = value, ["__teapie_value_2"] = value + "!" });
+    }
+
+    [Theory]
+    [InlineData("{% for t in Tenants %}{{ t.Name }}{% endfor %}", "AcmeGlobex")]
+    [InlineData("{% for t in Tenants %}{{ forloop.index | prepend: \"{{Temp.CompanyId_\" | append: \"}}\" }}{% endfor %}",
+        "{{Temp.CompanyId_1}}{{Temp.CompanyId_2}}")]
+    [InlineData("{% for u in Unsafe %}{{ u.Note | json }}|{{ u.Note | url_encode }}|{{ u.Note | strip_newlines }}|" +
+        "{% if u.Note contains 'line2' %}found{% endif %}{% endfor %}", "\"line1\\nline2\"|line1%0Aline2|line1line2|found")]
+    public void KeepTemplateTextAndValuesThatCannotChangeTheFileAsTheyAre(string content, string expected)
+    {
+        var variables = CreateVariables();
+        variables.SetVariable("Unsafe", new object[] { new { Note = "line1\nline2" } });
+
+        var result = CreateExpander(variables).Expand(content, FilePath);
+
+        result.Content.Should().Be(expected);
+        result.DataValues.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("{% for v in (\"{{A}}\") %}{{ v }}{% endfor %}", "{{A}}")]
+    [InlineData("{% for i in (1..1) %}{% assign url = \"{{ApiGatewayBaseUrl}}\" %}{{ url }}{% endfor %}",
+        "{{ApiGatewayBaseUrl}}")]
+    [InlineData("{% for c in Secrets %}{{ c | json }}{% endfor %}", "{\"Name\":\"{{apiKey}}\"}")]
+    [InlineData("{% for c in Secrets %}{{ c.Name | upcase }}{% endfor %}", "{{APIKEY}}")]
+    public void ReferenceBracesThatAreNotWrittenInTheSameExpression(string content, string value)
+    {
+        var variables = CreateVariables();
+        variables.SetVariable("Secrets", new object[] { new { Name = "{{apiKey}}" } });
+
+        var result = CreateExpander(variables).Expand(content, FilePath);
+
+        result.Content.Should().Be("{{__teapie_value_1}}");
+        result.DataValues.Should().Equal(new Dictionary<string, string> { ["__teapie_value_1"] = value });
     }
 
     [Fact]

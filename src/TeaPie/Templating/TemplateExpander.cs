@@ -64,9 +64,10 @@ internal sealed partial class TemplateExpander(
         var topLevelIndices = FindTopLevelIndices(blocks);
         var requestCounts = new int?[blocks.Count];
         var loopOutputs = new List<string>();
+        var dataValues = new TemplateDataValues();
         var template = WrapTopLevelLoops(
-            ParseTemplate(transformed, content, positionMap, filePath), blocks, topLevelIndices, requestCounts,
-            loopOutputs, filePath);
+            RenderedValueGuard.Apply(ParseTemplate(transformed, content, positionMap, filePath), dataValues), blocks,
+            topLevelIndices, requestCounts, loopOutputs, filePath);
 
         var usage = new DynamicSourceUsage[blocks.Count];
         var context = BuildRenderContext(blocks, forSources, sources, model, usage, filePath);
@@ -75,7 +76,10 @@ internal sealed partial class TemplateExpander(
 
         ValidateTopLevelLoopRequestCounts(requestCounts, blocks, forSources, topLevelIndices, warnedIndices, filePath);
 
-        return new TemplateExpansionResult(rendered, FindTemplatedRequestNames(content, rendered, blocks, loopOutputs));
+        return new TemplateExpansionResult(rendered, FindTemplatedRequestNames(content, rendered, blocks, loopOutputs))
+        {
+            DataValues = dataValues.ValuesByName
+        };
     }
 
     private static TemplatedRequestNames FindTemplatedRequestNames(

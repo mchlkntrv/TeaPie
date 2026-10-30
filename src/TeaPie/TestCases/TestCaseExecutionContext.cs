@@ -15,6 +15,7 @@ internal class TestCaseExecutionContext(TestCase testCase) : IExecutionContextEx
     public TestCase TestCase { get; } = testCase;
     public string? RequestsFileContent;
     public TemplatedRequestNames? TemplatedRequestNames { get; set; }
+    public IReadOnlyDictionary<string, string> TemplateDataValues { get; set; } = Templating.TemplateDataValues.None;
 
     private readonly Dictionary<string, ScriptExecutionContext> _preRequestScripts = [];
     private readonly Dictionary<string, ScriptExecutionContext> _postResponseScripts = [];

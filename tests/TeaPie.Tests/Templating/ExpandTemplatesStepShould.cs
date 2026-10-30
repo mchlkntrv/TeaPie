@@ -17,7 +17,10 @@ public class ExpandTemplatesStepShould
 
         var expander = Substitute.For<ITemplateExpander>();
         expander.Expand("{% for x in Xs %}BODY{% endfor %}", context.TestCase.RequestsFile.RelativePath)
-            .Returns(new TemplateExpansionResult("EXPANDED", TemplatedRequestNames.None));
+            .Returns(new TemplateExpansionResult("EXPANDED", TemplatedRequestNames.None)
+            {
+                DataValues = new Dictionary<string, string> { ["__teapie_value_1"] = "a\nb" }
+            });
 
         var accessor = new TestCaseExecutionContextAccessor { Context = context };
         var step = new ExpandTemplatesStep(accessor, expander, Substitute.For<IExpandedContentDumper>());
@@ -26,6 +29,7 @@ public class ExpandTemplatesStepShould
         await step.Execute(appContext);
 
         context.RequestsFileContent.Should().Be("EXPANDED");
+        context.TemplateDataValues.Should().Equal(new Dictionary<string, string> { ["__teapie_value_1"] = "a\nb" });
     }
 
     [Fact]

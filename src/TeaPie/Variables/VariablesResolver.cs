@@ -19,6 +19,12 @@ internal partial class VariablesResolver(IVariables variables, IServiceProvider 
         {
             var variableName = match.Groups[1].Value;
 
+            if (requestExecutionContext.TestCaseExecutionContext?.TemplateDataValues
+                .TryGetValue(variableName, out var templateDataValue) == true)
+            {
+                return templateDataValue;
+            }
+
             if (RequestVariablesResolver.IsRequestVariable(variableName))
             {
                 return ResolveRequestVariable(variableName, requestExecutionContext).Result;
