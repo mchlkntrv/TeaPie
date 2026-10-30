@@ -9,6 +9,7 @@ namespace TeaPie.Tests.Templating;
 public class TemplateExpanderShould
 {
     private const string FilePath = "requests/seed.http";
+    private const string BigOutersRequestLimitError = "*loop over 'BigOuters' would expand to more than 1000 requests*";
 
     private const string FourLevelContent =
         "{% for region in Regions %}{% for country in region.Countries %}" +
@@ -184,20 +185,20 @@ public class TemplateExpanderShould
     [InlineData("{% for a in (1..2) %}{% endfor %}\n{% endfor %}", "*requests/seed.http*endfor*")]
     [InlineData("{% for c in Companies %}{% for l in c.Licenses %}{% if true %}{{ c.Typo }}{% endif %}{% endfor %}" +
         "{% endfor %}", "*Typo*")]
-    [InlineData("{% for i in (1..1001) %}[{{ i }}]{% endfor %}", "*1001*1000*")]
+    [InlineData("{% for i in (1..501) %}" + OneRequest + OneRequest + "{% endfor %}", "*'(1..501)' would expand to more than 1000*")]
     [InlineData("{% for c in BigOuters %}{% for i in c.Items %}### r\nGET https://example.test/{{ i }}\n{% endfor %}" +
-        "{% endfor %}", "*1500*1000*BigOuters*")]
+        "{% endfor %}", BigOutersRequestLimitError)]
     [InlineData("\n{%- for c in BigOuters -%}\n{% for i in c.Items %}### r\nGET https://example.test/{{ i }}\n{% endfor %}" +
-        "\n{%- endfor -%}\n", "*1500*1000*BigOuters*")]
+        "\n{%- endfor -%}\n", BigOutersRequestLimitError)]
     [InlineData("{% for c in SmallOuters %}{% for i in c.Items %}### r\nGET https://example.test/{{ i }}\n{% endfor %}" +
         "{% endfor %}{% for c in BigOuters %}{% for i in c.Items %}### r\nGET https://example.test/{{ i }}\n" +
-        "{% endfor %}{% endfor %}", "*1500*1000*BigOuters*")]
+        "{% endfor %}{% endfor %}", BigOutersRequestLimitError)]
     [InlineData("{% unless Flag %}{% for c in BigOuters %}{% for i in c.Items %}### r\nGET https://example.test/{{ i }}\n" +
-        "{% endfor %}{% endfor %}{% endunless %}", "*1500*1000*BigOuters*")]
+        "{% endfor %}{% endfor %}{% endunless %}", BigOutersRequestLimitError)]
     [InlineData("{% case Environment %}{% when 'staging' %}{% for c in BigOuters %}{% for i in c.Items %}### r\n" +
-        "GET https://example.test/{{ i }}\n{% endfor %}{% endfor %}{% endcase %}", "*1500*1000*BigOuters*")]
+        "GET https://example.test/{{ i }}\n{% endfor %}{% endfor %}{% endcase %}", BigOutersRequestLimitError)]
     [InlineData("{% if Flag %}{% elsif true %}{% for c in BigOuters %}{% for i in c.Items %}### r\n" +
-        "GET https://example.test/{{ i }}\n{% endfor %}{% endfor %}{% endif %}", "*1500*1000*BigOuters*")]
+        "GET https://example.test/{{ i }}\n{% endfor %}{% endfor %}{% endif %}", BigOutersRequestLimitError)]
     [InlineData("{% for i in (1..99999999999) %}{{ i }}{% endfor %}", "*99999999999*")]
     [InlineData("{% for p in EmptyList %}{{ p }}{% endfor %}", "*zero items*")]
     [InlineData("{% if Flag %}{% for p in Missing %}{{ p }}{% endfor %}{% endif %}",
@@ -222,6 +223,19 @@ public class TemplateExpanderShould
         "*requests/seed.http*filters are not supported*'c.Licenses | first'*")]
     [InlineData("{% for c in Companies %}{% for l in c.Licenses required %}{{ l }}{% endfor %}{% endfor %}",
         "*requests/seed.http*unsupported option 'required'*'limit:', 'offset:' and 'reversed'*")]
+    [InlineData("{% for i in (1..3) limit:-1 %}{{ i }}{% endfor %}",
+        "*requests/seed.http*option 'limit:'*must be a whole number from 0 to 1000 or a variable, but is '-1'*")]
+    [InlineData("{% for i in (1..3) offset: 2.5 %}{{ i }}{% endfor %}", "*option 'offset:'*but is '2.5'*")]
+    [InlineData("{% for i in (1..3) limit: '2' %}{{ i }}{% endfor %}", "*option 'limit:'*but is ''2''*")]
+    [InlineData("{% for i in (1..3) limit: 1001 %}{{ i }}{% endfor %}", "*option 'limit:'*but is '1001'*")]
+    [InlineData("{% assign n = -1 %}{% for i in (1..3) limit: n %}{{ i }}{% endfor %}",
+        "*requests/seed.http*option 'limit:' of the '{% for i %}' loop must be a whole number from 0 to 1000, but is '-1'*")]
+    [InlineData("{% for c in Companies %}{% for l in c.Licenses offset: Greeting %}{{ l }}{% endfor %}{% endfor %}",
+        "*requests/seed.http*option 'offset:' of the '{% for l %}' loop*but is 'Hi'*")]
+    [InlineData("{% for i in (1..3) offset:continue %}{{ i }}{% endfor %}",
+        "*requests/seed.http*'offset: continue' is not supported*")]
+    [InlineData("{% for i in (1..1) %}{{ i | divided_by: 0 }}{% endfor %}",
+        "Templating error in 'requests/seed.http': rendering failed: Attempted to divide by zero.")]
     [InlineData("{% for i in (1..1) %}{{Temp.Id_{{ forloop.index }}}}{% endfor %}", "*failed to parse*")]
     [InlineData("{% for i in (1..1) %}{% raw %}{{ i }}{% endfor %}", "*failed to parse*raw*")]
     [InlineData("{% for t in Tenants %}{% if t.Name %}X{% endfor %}", "*failed to parse template*")]
@@ -232,6 +246,14 @@ public class TemplateExpanderShould
         var act = () => Expand(content);
 
         act.Should().Throw<InvalidOperationException>().WithMessage(expectedMessage);
+    }
+
+    [Fact]
+    public void KeepTheOriginalExceptionWhenRenderingFails()
+    {
+        var act = () => Expand("{% for i in (1..1) %}{{ i | divided_by: 0 }}{% endfor %}");
+
+        act.Should().Throw<InvalidOperationException>().WithInnerException<DivideByZeroException>();
     }
 
     [Fact]
@@ -264,8 +286,7 @@ public class TemplateExpanderShould
         "{% for i in (1..1000) %}[{{ i }}]{% endfor %}",
         "{% for i in (1..1000) %}[{{ i }}]{% endfor %}mid{% for j in (1..1000) %}[{{ j }}]{% endfor %}",
         "{% for c in SmallOuters %}{% for i in c.Items %}### n\nGET https://example.test/{{ i }}\n{% endfor %}{% endfor %}" +
-            "{% for i in (1..1000) %}### s\nGET https://example.test/{{ i }}\n{% endfor %}",
-        $"{{% for i in (1..1000) %}}{RepeatTag(100)}{{% endfor %}}"
+            "{% for i in (1..1000) %}### s\nGET https://example.test/{{ i }}\n{% endfor %}"
     };
 
     [Theory]
@@ -277,39 +298,151 @@ public class TemplateExpanderShould
         act.Should().NotThrow();
     }
 
-    public static TheoryData<string> ContentExceedingRenderSteps => new()
-    {
-        $"{{% for i in (1..1000) %}}{RepeatTag(205)}{{% endfor %}}",
-        $"{{% for i in (1..1000) %}}{RepeatTag(100)}{{% endfor %}}mid{{% for j in (1..1000) %}}{RepeatTag(100)}{{% endfor %}}"
-    };
-
     [Theory]
-    [MemberData(nameof(ContentExceedingRenderSteps))]
-    public void ThrowWhenRenderStepsExceedTheSharedBudget(string content)
+    [InlineData("{% for i in (1..30) %}{{ i }}{% endfor %}", true)]
+    [InlineData("{% for i in (1..30) %}{{ i }}{{ i }}{{ i }}{{ i }}{% endfor %}", false)]
+    [InlineData("{% for i in (1..30) %}{{ i }}{% endfor %}mid{% for j in (1..30) %}{{ j }}{% endfor %}", false)]
+    public void ShareTheRenderStepBudgetAcrossTheWholeFile(string content, bool succeeds)
     {
-        var act = () => Expand(content);
+        var act = () => Expand(content, new TemplatingLimits { MaxRenderSteps = 100 });
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*rendering steps*");
+        if (succeeds)
+        {
+            act.Should().NotThrow();
+        }
+        else
+        {
+            act.Should().Throw<InvalidOperationException>()
+                .WithMessage($"Templating error in '{FilePath}': template exceeded the maximum of 100 rendering steps*");
+        }
     }
 
     [Theory]
     [InlineData(3, true)]
     [InlineData(4, false)]
-    public void HonorALiteralLimitWhenCheckingTheExpansionMaximum(int limit, bool succeeds)
+    public void RejectLoopsNestedDeeperThanTheMaximum(int depth, bool succeeds)
     {
-        var expander = CreateExpander(CreateVariables(), new TemplatingLimits { MaxExpandedRequests = 3 });
+        var content = string.Concat(Enumerable.Range(0, depth).Select(level => $"{{% for v{level} in (1..1) %}}")) +
+            "x" + string.Concat(Enumerable.Repeat("{% endfor %}", depth));
 
-        var act = () => expander
-            .Expand($"{{% for i in Items limit: {limit} %}}{{{{ i }}}}{{% endfor %}}", FilePath)
-            .Content;
+        var act = () => Expand(content, new TemplatingLimits { MaxNestingDepth = 3 });
 
         if (succeeds)
         {
-            act.Should().NotThrow().Which.Should().Be("123");
+            act.Should().NotThrow().Which.Should().Be("x");
         }
         else
         {
-            act.Should().Throw<InvalidOperationException>().WithMessage("*loop over 'Items' would expand to 4 requests*");
+            act.Should().Throw<InvalidOperationException>().WithMessage(
+                $"Templating error in '{FilePath}': loops are nested 4 levels deep, exceeding the maximum of 3*");
+        }
+    }
+
+    private const string OneRequest = "### r\nGET https://example.test/{{ i }}\n";
+
+    [Theory]
+    [InlineData("{% for i in Items limit: 3 %}" + OneRequest + "{% endfor %}", true)]
+    [InlineData("{% for i in Items %}{% if i == 2 %}" + OneRequest + "{% endif %}{% endfor %}", true)]
+    [InlineData("### r\nPOST https://example.test\n\n[{% for i in Items %}{{ i }},{% endfor %}0]\n", true)]
+    [InlineData("{% for i in Items limit: 4 %}" + OneRequest + "{% endfor %}", false)]
+    [InlineData("{% assign n = 4 %}{% for i in Items limit: n %}" + OneRequest + "{% endfor %}", false)]
+    [InlineData("{% for i in (1..2) %}" + OneRequest + OneRequest + "{% endfor %}", false)]
+    [InlineData("{% if true %}{% for i in (1..2) %}" + OneRequest + OneRequest + "{% endfor %}{% endif %}", false)]
+    public void CountTheRequestsThatEachTopLevelLoopGenerates(string content, bool succeeds)
+    {
+        var act = () => Expand(content, new TemplatingLimits { MaxExpandedRequests = 3 });
+
+        if (succeeds)
+        {
+            act.Should().NotThrow();
+        }
+        else
+        {
+            act.Should().Throw<InvalidOperationException>().WithMessage(
+                $"Templating error in '{FilePath}': loop over '*' would expand to more than 3 requests*");
+        }
+    }
+
+    [Fact]
+    public void StopRenderingAsSoonAsALoopExceedsTheRequestLimit()
+    {
+        var content = "{% for i in (1..2) %}{% if i == 2 %}{{ Missing.Value }}{% endif %}" +
+            string.Concat(Enumerable.Repeat(OneRequest, 5)) + "{% endfor %}";
+
+        var act = () => Expand(content, new TemplatingLimits { MaxExpandedRequests = 3 });
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*loop over '(1..2)' would expand to more than 3*");
+    }
+
+    [Theory]
+    [InlineData("{% for i in (1..2) %}{% for j in (1..2) %}{{ j }}{% endfor %}{% endfor %}", null)]
+    [InlineData("{% for i in (1..3) limit: 1 %}{{ i }}{% endfor %}",
+        "*loop over '(1..3)' has 3 items, exceeding the maximum of 2 items per loop*")]
+    [InlineData("{% for i in (1..1) %}{% for j in (1..2000000000) %}{{ j }}{% endfor %}{% endfor %}",
+        "*loop over '(1..2000000000)' has 2000000000 items*")]
+    [InlineData("{% for i in (\"a\", \"b\", \"c\") %}{{ i }}{% endfor %}", "*has 3 items*")]
+    [InlineData("{% for i in Items %}{{ i }}{% endfor %}", "*loop over 'Items' has 5 items*")]
+    [InlineData("{% for c in Companies %}{% for l in c.Licenses %}{{ l }}{% endfor %}{% endfor %}",
+        "*loop over 'c.Licenses' has more than 2 items (c[0]), exceeding the maximum of 2 items per loop*")]
+    public void RejectLoopsWithMoreItemsThanTheMaximum(string content, string? expectedMessage)
+    {
+        var act = () => Expand(content, new TemplatingLimits { MaxLoopItems = 2 });
+
+        if (expectedMessage is null)
+        {
+            act.Should().NotThrow();
+        }
+        else
+        {
+            act.Should().Throw<InvalidOperationException>().WithMessage($"Templating error in '{FilePath}': {expectedMessage}");
+        }
+    }
+
+    [Theory]
+    [InlineData("{% for i in (1..3) %}0123456789{% endfor %}", true)]
+    [InlineData("{% for i in (1..6) %}0123456789{% endfor %}", false)]
+    [InlineData("{% for i in (1..3) %}0123456789{% endfor %}{% for j in (1..3) %}0123456789{% endfor %}", false)]
+    public void RejectLoopsWhoseOutputIsLongerThanTheMaximum(string content, bool succeeds)
+    {
+        var act = () => Expand(content, new TemplatingLimits { MaxExpandedLength = 50 });
+
+        if (succeeds)
+        {
+            act.Should().NotThrow();
+        }
+        else
+        {
+            act.Should().Throw<InvalidOperationException>().WithMessage(
+                $"Templating error in '{FilePath}': the loops in the file would expand to more than 50 characters*");
+        }
+    }
+
+    private const string TenCharacters = "{% assign s = 'xxxxxxxxxx' %}";
+
+    [Theory]
+    [InlineData("{% assign s = 'xx' %}{% for i in (1..3) %}{% assign s = s | append: s %}{% endfor %}{{ s }}",
+        "xxxxxxxxxxxxxxxx", null)]
+    [InlineData("{% capture c %}{% for i in (1..2) %}{{ i }}{% endfor %}{% endcapture %}{% assign d = c %}{{ d }}", "12", null)]
+    [InlineData(TenCharacters + "{% assign s = s | append: s %}{% assign s = s | append: s %}" +
+        "{% assign s = s | append: s %}", null, "filter 'append' produced a text longer than 50 characters*")]
+    [InlineData(TenCharacters + "{% for i in (1..3) %}{% assign s = s | prepend: s %}{% endfor %}", null,
+        "filter 'prepend' produced a text longer than 50 characters*")]
+    [InlineData("{% assign a = 'x' | split: ',' %}{% for i in (1..3) %}{% assign a = a | concat: a %}{% endfor %}",
+        null, "filter 'concat' produced a list with more than 5 items*")]
+    [InlineData(TenCharacters + "{% for i in (1..3) %}{% capture s %}{{ s }}{{ s }}{% endcapture %}{% endfor %}", null,
+        "'{% capture s %}' produced a text longer than 50 characters*")]
+    public void RejectValuesThatGrowLargerThanTheMaximum(string content, string? expected, string? expectedMessage)
+    {
+        var act = () => Expand(content, new TemplatingLimits { MaxExpandedLength = 50, MaxListItems = 5 });
+
+        if (expectedMessage is null)
+        {
+            act.Should().NotThrow().Which.Should().Be(expected);
+        }
+        else
+        {
+            act.Should().Throw<InvalidOperationException>()
+                .WithMessage($"Templating error in '{FilePath}': {expectedMessage}");
         }
     }
 
@@ -477,7 +610,8 @@ public class TemplateExpanderShould
         return logger.Entries;
     }
 
-    private static string RepeatTag(int count) => string.Concat(Enumerable.Repeat("{{ i }}", count));
+    private static string Expand(string content, TemplatingLimits limits)
+        => CreateExpander(CreateVariables(), limits).Expand(content, FilePath).Content;
 
     private static TeaPieVariables CreateVariables()
     {

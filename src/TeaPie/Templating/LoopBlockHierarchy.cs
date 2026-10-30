@@ -27,27 +27,4 @@ internal static class LoopBlockHierarchy
 
     public static bool IsTopLevel(int blockIndex, IReadOnlyList<LoopBlock> blocks)
         => GetAncestorIndices(blockIndex, blocks).Count == 0;
-
-    public static bool HasDescendant(int blockIndex, IReadOnlyList<LoopBlock> blocks)
-    {
-        var block = blocks[blockIndex];
-
-        for (var i = 0; i < blocks.Count; i++)
-        {
-            if (i != blockIndex
-                && blocks[i].StartIndex >= block.StartIndex
-                && blocks[i].StartIndex + blocks[i].Length <= block.StartIndex + block.Length)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public static bool IsNestingRoot(int blockIndex, IReadOnlyList<LoopBlock> blocks)
-        => IsTopLevel(blockIndex, blocks) && HasDescendant(blockIndex, blocks);
-
-    public static bool IsStandaloneBlock(int blockIndex, IReadOnlyList<LoopBlock> blocks)
-        => IsTopLevel(blockIndex, blocks) && !HasDescendant(blockIndex, blocks);
 }

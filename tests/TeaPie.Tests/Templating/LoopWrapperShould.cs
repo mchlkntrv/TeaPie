@@ -4,7 +4,7 @@ using TeaPie.Templating;
 
 namespace TeaPie.Tests.Templating;
 
-public class TopLevelLoopWrapperShould
+public class LoopWrapperShould
 {
     private static readonly FluidParser Parser = new();
 
@@ -69,7 +69,9 @@ public class TopLevelLoopWrapperShould
     {
         var template = Parser.Parse("{% for a in (1..1) %}{% endfor %}{% for b in (1..1) %}{% endfor %}");
 
-        var act = () => TopLevelLoopWrapper.Wrap(template, expectedLoopVariableNames.Split(','), (_, _) => { });
+        var act = () => LoopWrapper.Wrap(
+            template, expectedLoopVariableNames.Split(','), new TemplatingLimits(), (_, _, _) => { },
+            (_, _, _) => { });
 
         act.Should().Throw<InvalidOperationException>().WithMessage("Templating error: internal error*");
     }
@@ -78,8 +80,9 @@ public class TopLevelLoopWrapperShould
         string content, string[] expectedLoopVariableNames)
     {
         var reported = new List<(int, string)>();
-        var template = TopLevelLoopWrapper.Wrap(
-            Parser.Parse(content), expectedLoopVariableNames, (index, output) => reported.Add((index, output)));
+        var template = LoopWrapper.Wrap(
+            Parser.Parse(content), expectedLoopVariableNames, new TemplatingLimits(), (_, _, _) => { },
+            (index, output, _) => reported.Add((index, output)));
 
         return (template.Render(new TemplateContext()), reported);
     }

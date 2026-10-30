@@ -7,17 +7,9 @@ internal sealed record ForTagSource(
     string CollectionExpression,
     string FluidOptions,
     bool IsReversed,
-    string? OffsetExpression,
-    int? LiteralLimit,
-    int? LiteralOffset)
+    string? OffsetExpression)
 {
     public string ToFluidSource(string collectionExpression) => collectionExpression + FluidOptions;
-
-    public int ApplyLiteralWindow(int itemCount)
-    {
-        var count = Math.Max(0, itemCount - (LiteralOffset ?? 0));
-        return LiteralLimit is { } limit ? Math.Min(count, Math.Max(0, limit)) : count;
-    }
 }
 
 internal static class ForTagSourceParser
@@ -25,9 +17,13 @@ internal static class ForTagSourceParser
     private const string ReversedOption = "reversed";
     private const string LimitOption = "limit:";
     private const string OffsetOption = "offset:";
+    private const string ContinueOffset = "continue";
     private const string SupportedOptions = "'limit:', 'offset:' and 'reversed'";
 
-    public static ForTagSource Parse(string sourceExpression)
+    public static bool IsValidOptionValue(decimal value, int maxOptionValue)
+        => value == decimal.Truncate(value) && value >= 0 && value <= maxOptionValue;
+
+    public static ForTagSource Parse(string sourceExpression, int maxOptionValue)
     {
         EnsureNoFilters(sourceExpression);
 
@@ -41,8 +37,6 @@ internal static class ForTagSourceParser
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var isReversed = false;
         string? offsetExpression = null;
-        int? limit = null;
-        int? offset = null;
 
         for (var i = 1; i < tokens.Count; i++)
         {
@@ -74,23 +68,40 @@ internal static class ForTagSourceParser
                         "is missing a value.");
             }
 
+            if (name == OffsetOption && value == ContinueOffset)
+            {
+                throw new InvalidOperationException(
+                    "Templating error: 'offset: continue' is not supported in the '{% for %}' source " +
+                    $"'{sourceExpression}'. Use a number or a variable.");
+            }
+
             options.Append(' ').Append(name).Append(' ').Append(value);
 
-            var literal = int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-                ? parsed
-                : (int?)null;
-            if (name == LimitOption)
-            {
-                limit = literal;
-            }
-            else
+            EnsureValidLiteralOptionValue(name, value, sourceExpression, maxOptionValue);
+            if (name == OffsetOption)
             {
                 offsetExpression = value;
-                offset = literal;
             }
         }
 
-        return new ForTagSource(tokens[0], options.ToString(), isReversed, offsetExpression, limit, offset);
+        return new ForTagSource(tokens[0], options.ToString(), isReversed, offsetExpression);
+    }
+
+    private static void EnsureValidLiteralOptionValue(
+        string name, string value, string sourceExpression, int maxOptionValue)
+    {
+        if (char.IsLetter(value[0]) || value[0] == '_')
+        {
+            return;
+        }
+
+        if (!decimal.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
+            || !IsValidOptionValue(parsed, maxOptionValue))
+        {
+            throw new InvalidOperationException(
+                $"Templating error: option '{name}' in the '{{% for %}}' source '{sourceExpression}' must be a " +
+                $"whole number from 0 to {maxOptionValue} or a variable, but is '{value}'.");
+        }
     }
 
     private static void EnsureNoFilters(string sourceExpression)

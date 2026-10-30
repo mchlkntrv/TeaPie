@@ -110,7 +110,7 @@ A collection can be followed by options, separated by spaces, in any order:
 {% endfor %}
 ```
 
-The value of `limit:`/`offset:` can be a number or a variable (`limit: MaxPartners`). A literal `limit:` also lowers the count used by the 1000-request guard below; a variable one does not, since its value is not known before rendering.
+The value of `limit:`/`offset:` must be a whole number from 0 to 1000, written directly or held in a variable (`limit: MaxPartners`). Anything else is an error naming the file: a negative or decimal number, text, or Liquid's `offset: continue`. A number written directly is checked before rendering, a variable when its loop starts. The 1000-request guard below counts the requests a loop actually generates, so `limit:` and `{% if %}` conditions are taken into account.
 
 A loop source does **not** accept filters — `{% for x in Items | sort %}` is an error, because Liquid's `for` tag only takes a collection followed by the options above.
 
@@ -255,7 +255,7 @@ Content-Type: application/json
 {% endfor %}
 ```
 
-All requests produced by a nesting-root loop (the outer loop and everything nested inside it) count together against the 1000-request expansion limit.
+All requests produced by a top-level loop (the outer loop and everything nested inside it) count together against the 1000-request limit.
 
 ## Conditions and Assignments
 
@@ -298,19 +298,24 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Variable is tagged as `secret` | Error — its values would otherwise appear in the expanded file, in logs and in `--dump-expanded` output* |
 | Collection resolves to zero items (empty list, `()`, or a numeric range with no items) | Error — an accidentally empty collection is almost always a mistake* (for an **inner** loop, a log message instead — see [below](#empty-inner-collections)) |
 | A filter in a loop source (e.g. `{% for x in Items \| sort %}`), an unknown or duplicated loop option | Error naming the source and listing the supported [loop options](#loop-options) |
-| Loop would expand to more than **1000** requests | Error, to prevent runaway expansion |
+| A `limit:`/`offset:` value that is not a whole number from 0 to 1000 (e.g. `limit: -1`, `offset: 2.5`) | Error naming the option and the value — see [Loop Options](#loop-options) |
+| A loop's collection has more than **1000** items (a top-level source or a fixed inner source such as `(1..5000)` is checked before rendering; an inner source taken from an outer item, such as `company.Licenses`, each time that inner loop starts) | Error naming the loop and its item count. `limit:` does not help: the whole collection counts, because it is loaded before `limit:` applies |
+| A top-level loop, together with the loops nested in it, would generate more than **1000** requests (each top-level loop in a file is counted on its own) | Error as soon as the 1001st request is generated, to prevent runaway expansion |
 | A numeric range bound (e.g. `(1..99999999999)`) is too large to fit a 32-bit integer | Error naming the offending bound, instead of a raw overflow failure* |
 | Missing `{% endfor %}`, a stray `{% endfor %}` with no matching `{% for %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag (a file whose only tag is a stray `{% endfor %}` is not a template, so it gets the warning below instead) |
 | A file contains `{%` but no supported tag (see [How It Fits the Pipeline](#how-it-fits-the-pipeline)) | Warning (not an error); the file is sent unchanged |
-| Nested `{% for %}` loops | Supported — see [Multiple Loops in One File](#multiple-loops-in-one-file); a nesting-root loop's combined request count (across all its nesting levels) is what counts against the 1000-request limit above |
+| Nested `{% for %}` loops | Supported — see [Multiple Loops in One File](#multiple-loops-in-one-file); a top-level loop's combined request count (across all its nesting levels) is what counts against the 1000-request limit above |
 | An item property referenced in the loop body does not exist (e.g. `{{ partner.Typo }}`) | Error naming the missing member |
-| Rendering the file requires more than **200 000** Fluid evaluation steps (e.g. many `{{ }}`/`{% %}` expressions repeated across items) | Error suggesting the file be checked for repeated expressions or split into smaller loops — this is separate from, and on top of, the 1000-request cap |
+| Rendering the file requires more than **200 000** Fluid evaluation steps (e.g. many `{{ }}`/`{% %}` expressions repeated across items, or nested loops that together run too many times) | Error suggesting the file be checked for repeated expressions or split into smaller loops — this is separate from, and on top of, the 1000-request cap |
+| Loops nested more than **10** levels deep | Error naming the depth and the innermost loop, before anything is rendered |
+| The loops in the file would expand to more than **10 000 000** characters in total | Error as soon as the limit is passed, to keep memory use bounded |
+| A filter (e.g. `append`, `concat`) or `{% capture %}` produces a text longer than **10 000 000** characters or a list with more than **100 000** items, typically a value built from itself in a loop such as `{% assign s = s | append: s %}` | Error naming the filter or the captured variable, so the run fails fast instead of running out of memory |
 | Scanning the file for template syntax takes longer than **1 second** in one step (e.g. an extremely long line after an unclosed `{%`) | Error asking to check the file for an unclosed `{{`, `{%` or quote, instead of the run hanging |
 | Two or more requests share the same `# @name` after expansion | Error, except for a name written literally only inside loops and at most once per loop body, which is a warning — see [Naming Requests Inside a Loop](#naming-requests-inside-a-loop) |
 | An inner loop's collection is empty for every outer item, so it generated no requests | Warning (not an error) — see [Empty Inner Collections](#empty-inner-collections) |
 | A loop whose body declares requests generated none (e.g. `offset:` past the end, `limit: 0`, or an `{% if %}` that excluded every item) | Warning (not an error), naming the loop and the file. A loop placed inside a request body (e.g. building a JSON array) declares no requests and is not checked |
 
-All errors include the request file's path to make them actionable.
+All errors include the request file's path to make them actionable. The numeric limits above (1000 items per loop, 1000 requests per top-level loop, 10 000 000 characters, 100 000 list items, 200 000 rendering steps, nesting depth 10) are fixed and cannot be configured.
 
 \* These guards apply to a loop's own source expression. A **top-level** source is resolved once, before rendering. An **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses` in the [nested-loop example](#multiple-loops-in-one-file) above) is instead checked during rendering, every time that inner loop is about to run, in exactly the same scope the loop itself sees — so TeaPie variables, `{% assign %}` values and enclosing loop variables (including indexers such as `company.Groups[group]`) resolve the same way in the check as in the loop. A missing property or a value that isn't a collection (including `null`) is an error, unconditionally, the same as for a top-level source, and names the offending outer item(s) as a path such as `region[0].country[1]` — the item's position in its source collection, even when the outer loop uses `offset:` or `reversed`. The one exception is an **empty** per-iteration collection — see [Empty Inner Collections](#empty-inner-collections). The 1000-request and malformed-tag guards are unaffected by any of this.
 

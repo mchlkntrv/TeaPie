@@ -7,22 +7,34 @@ namespace TeaPie.Tests.Templating;
 
 public class FluidMessageFormatsShould
 {
-    [Fact]
-    public void StillReportRenderStepLimitExceededExceptionsUsingTheExpectedMarkerWord()
+    [Theory]
+    [InlineData(10, true)]
+    [InlineData(1000, false)]
+    public void KeepRejectingStepsOnlyAfterTheStepLimitWasExceeded(int maxSteps, bool exhausted)
     {
         var parser = new FluidParser();
-        var heavyTag = string.Concat(Enumerable.Repeat("{{ i }}", 50));
-        parser.TryParse($"{{% for i in (1..50) %}}{heavyTag}{{% endfor %}}", out var template, out _);
+        parser.TryParse("{% for i in (1..50) %}{{ i }}{% endfor %}", out var template, out _);
+        var context = new TemplateContext(new TemplateOptions { MaxSteps = maxSteps });
 
-        var options = new TemplateOptions { MaxSteps = 10 };
-        var context = new TemplateContext(new Dictionary<string, object?>(), options);
+        try
+        {
+            template!.Render(context);
+        }
+        catch (InvalidOperationException)
+        {
+        }
 
-        var act = () => template!.Render(context);
+        var act = context.IncrementSteps;
 
-        act.Should().Throw<InvalidOperationException>()
-            .Which.Message.Should().Contain(
-                FluidMessageFormats.RenderStepLimitMarker,
-                "TemplateExpander.IsRenderStepLimitExceeded relies on this exact word to detect the limit");
+        if (exhausted)
+        {
+            act.Should().Throw<InvalidOperationException>(
+                "TemplateExpander.IsRenderStepLimitExceeded relies on this to tell the step limit from other errors");
+        }
+        else
+        {
+            act.Should().NotThrow();
+        }
     }
 
     [Fact]

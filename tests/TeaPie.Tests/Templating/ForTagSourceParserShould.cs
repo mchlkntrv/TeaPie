@@ -5,10 +5,12 @@ namespace TeaPie.Tests.Templating;
 
 public class ForTagSourceParserShould
 {
+    private const int MaxOptionValue = 1000;
+
     [Fact]
     public void ParseABareCollectionWithoutOptions()
     {
-        var source = ForTagSourceParser.Parse("company.Licenses");
+        var source = ForTagSourceParser.Parse("company.Licenses", MaxOptionValue);
 
         source.CollectionExpression.Should().Be("company.Licenses");
         source.FluidOptions.Should().BeEmpty();
@@ -22,23 +24,20 @@ public class ForTagSourceParserShould
     [InlineData("items reversed limit:2 offset:1")]
     public void ParseAllOptionsInAnyOrder(string expression)
     {
-        var source = ForTagSourceParser.Parse(expression);
+        var source = ForTagSourceParser.Parse(expression, MaxOptionValue);
 
         source.CollectionExpression.Should().Be("items");
         source.IsReversed.Should().BeTrue();
-        source.LiteralLimit.Should().Be(2);
-        source.LiteralOffset.Should().Be(1);
         source.OffsetExpression.Should().Be("1");
         source.FluidOptions.Should().Contain("limit: 2").And.Contain("offset: 1").And.Contain("reversed");
     }
 
     [Fact]
-    public void KeepAVariableLimitAsAFluidOptionWithoutALiteralValue()
+    public void KeepAVariableLimitAsAFluidOption()
     {
-        var source = ForTagSourceParser.Parse("items limit: MaxItems");
+        var source = ForTagSourceParser.Parse("items limit: MaxItems", MaxOptionValue);
 
         source.FluidOptions.Should().Be(" limit: MaxItems");
-        source.LiteralLimit.Should().BeNull();
     }
 
     [Theory]
@@ -48,7 +47,7 @@ public class ForTagSourceParserShould
     [InlineData("(1..5) reversed", "(1..5)")]
     public void KeepWhitespaceInsideBracketsQuotesAndParenthesesPartOfTheCollection(string expression, string expected)
     {
-        var source = ForTagSourceParser.Parse(expression);
+        var source = ForTagSourceParser.Parse(expression, MaxOptionValue);
 
         source.CollectionExpression.Should().Be(expected);
         source.IsReversed.Should().BeTrue();
@@ -57,7 +56,7 @@ public class ForTagSourceParserShould
     [Fact]
     public void NotTreatAPipeInsideAQuotedInlineLiteralAsAFilter()
     {
-        var source = ForTagSourceParser.Parse("(\"a|b\", \"c\")");
+        var source = ForTagSourceParser.Parse("(\"a|b\", \"c\")", MaxOptionValue);
 
         source.CollectionExpression.Should().Be("(\"a|b\", \"c\")");
     }
@@ -68,7 +67,7 @@ public class ForTagSourceParserShould
     [InlineData("company.Licenses | where: \"active\", true limit: 2")]
     public void RejectFiltersInTheSource(string expression)
     {
-        var act = () => ForTagSourceParser.Parse(expression);
+        var act = () => ForTagSourceParser.Parse(expression, MaxOptionValue);
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*filters are not supported*'limit:', 'offset:' and 'reversed'*");
@@ -79,7 +78,7 @@ public class ForTagSourceParserShould
     [InlineData("items required", "required")]
     public void RejectAnUnknownOption(string expression, string option)
     {
-        var act = () => ForTagSourceParser.Parse(expression);
+        var act = () => ForTagSourceParser.Parse(expression, MaxOptionValue);
 
         act.Should().Throw<InvalidOperationException>().WithMessage($"*unsupported option '{option}'*");
     }
@@ -89,7 +88,7 @@ public class ForTagSourceParserShould
     [InlineData("items limit: 1 limit: 2", "limit:")]
     public void RejectADuplicatedOption(string expression, string option)
     {
-        var act = () => ForTagSourceParser.Parse(expression);
+        var act = () => ForTagSourceParser.Parse(expression, MaxOptionValue);
 
         act.Should().Throw<InvalidOperationException>().WithMessage($"*option '{option}' is specified more than once*");
     }
@@ -97,18 +96,8 @@ public class ForTagSourceParserShould
     [Fact]
     public void RejectAnOptionWithoutAValue()
     {
-        var act = () => ForTagSourceParser.Parse("items limit:");
+        var act = () => ForTagSourceParser.Parse("items limit:", MaxOptionValue);
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*option 'limit:'*is missing a value*");
     }
-
-    [Theory]
-    [InlineData("items", 10, 10)]
-    [InlineData("items limit: 3", 10, 3)]
-    [InlineData("items offset: 8", 10, 2)]
-    [InlineData("items offset: 8 limit: 5", 10, 2)]
-    [InlineData("items offset: 20", 10, 0)]
-    [InlineData("items limit: Max", 10, 10)]
-    public void ApplyOnlyLiteralLimitAndOffsetToTheExpandedItemCount(string expression, int itemCount, int expected)
-        => ForTagSourceParser.Parse(expression).ApplyLiteralWindow(itemCount).Should().Be(expected);
 }

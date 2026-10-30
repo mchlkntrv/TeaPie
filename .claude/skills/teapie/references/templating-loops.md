@@ -29,7 +29,7 @@ Property access is `{{ item.PropertyName }}` and is **case-sensitive**. Dotted v
 
 **3. A numeric range:** `{% for i in (1..5) %}` — inclusive on both ends (5 iterations).
 
-**Loop options** follow the collection, space-separated, in any order: `limit: n`, `offset: n`, `reversed` (standard Liquid; `n` may be a number or a variable) — e.g. `{% for p in Partners offset: 1 limit: 10 reversed %}`. A loop source does **not** accept filters (`{% for x in Items | sort %}` is an error).
+**Loop options** follow the collection, space-separated, in any order: `limit: n`, `offset: n`, `reversed` (standard Liquid; `n` must be a whole number from 0 to 1000, written directly or held in a variable — anything else, including `offset: continue`, is an error) — e.g. `{% for p in Partners offset: 1 limit: 10 reversed %}`. A loop source does **not** accept filters (`{% for x in Items | sort %}` is an error).
 
 **Top-level sources** must be a TeaPie variable name, an inline list or a range — not a member path (`Root.Children`), an indexer or an `{% assign %}` variable.
 
@@ -70,7 +70,7 @@ Content-Type: application/json
 {% endfor %}
 ```
 
-All requests produced by a nesting-root loop (outer loop + everything nested inside it) count together against the 1000-request expansion limit.
+All requests produced by a top-level loop (outer loop + everything nested inside it) count together against the 1000-request limit; `limit:` and `{% if %}` are taken into account because the generated requests are counted.
 
 ## Conditions and assignments
 
@@ -85,8 +85,12 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | Collection variable does not exist / isn't a collection / resolves to zero items | Error — naming the file and the problem* |
 | Loop source is a variable tagged `secret` | Error — secret variables are never visible to templates (in conditions/`assign` they act as undefined)* |
 | A numeric range bound (e.g. `(1..99999999999)`) is too large for a 32-bit integer | Error naming the offending bound, instead of a raw overflow failure* |
-| Loop would expand to more than **1000** requests | Error |
-| Rendering needs more than **200 000** Fluid evaluation steps (too many `{{ }}`/`{% %}` expressions across items) | Error — separate from, and on top of, the 1000-request cap |
+| A loop's collection has more than **1000** items (checked before rendering for fixed sources, when an inner loop starts for sources taken from an outer item); `limit:` does not help | Error naming the loop and its item count |
+| A top-level loop (with its nested loops) would generate more than **1000** requests | Error, as soon as the 1001st request is generated |
+| Rendering needs more than **200 000** Fluid evaluation steps (too many `{{ }}`/`{% %}` expressions across items, or nested loops that together run too many times) | Error — separate from, and on top of, the 1000-request cap |
+| Loops nested more than **10** levels deep | Error naming the depth and the innermost loop, before rendering |
+| The loops in the file would expand to more than **10 000 000** characters in total | Error, as soon as the limit is passed |
+| A filter or `{% capture %}` produces a text longer than **10 000 000** characters or a list with more than **100 000** items (e.g. `{% assign s = s | append: s %}` in a loop) | Error naming the filter or the captured variable |
 | Missing `{% endfor %}`, a stray `{% endfor %}`, or malformed `{% for %}` syntax | Error identifying the malformed tag |
 | Scanning the file for template syntax takes longer than **1 s** in one step (e.g. a very long line after an unclosed `{%`) | Error suggesting to check for an unclosed `{{`, `{%` or quote |
 | A filter in a loop source, or an unknown/duplicated loop option | Error listing the supported loop options |
@@ -95,7 +99,7 @@ Templating fails loudly instead of silently producing zero or empty requests:
 | An inner loop's collection is empty for **every** outer item (it generated no requests at all) | Warning, not an error |
 | A loop whose body declares requests generated none (`offset:` past the end, `limit: 0`, an `{% if %}` excluding every item) | Warning, not an error |
 
-All of the above errors include the request file's path.
+All of the above errors include the request file's path. The numeric limits are fixed (not configurable).
 
 \* For an **inner** loop whose source references an ancestor loop's variable (e.g. `company.Licenses`, `company[key]`), TeaPie checks that source during rendering, each time the inner loop is about to run, in the same scope the loop sees (TeaPie variables, `{% assign %}` values, enclosing loop variables). Missing/`null`/non-collection is still an unconditional error there (naming which outer item by its source position, e.g. `region[0].country[1]`), same as a top-level source — but an **empty** per-iteration collection is not an error (a company with no customers is often valid, not a mistake): that outer item just produces no requests from the inner loop (or renders its `{% else %}` branch). It is never silent, though — each empty outer item gets a **Debug** log message naming it (e.g. `company[1]`), and if the collection is empty for **every** outer item, so the inner loop generated no requests at all, a **Warning** (visible by default) names the loop and the file. If a file must not run with such data, assert it in the `-init.csx`/`-test.csx` script instead.
 

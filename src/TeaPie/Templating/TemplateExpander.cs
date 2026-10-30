@@ -4,12 +4,11 @@ using System.Text.RegularExpressions;
 using Fluid;
 using Fluid.Values;
 using Microsoft.Extensions.Logging;
-using TeaPie.Http.Parsing;
 using TeaPie.Variables;
 
 namespace TeaPie.Templating;
 
-internal sealed partial class TemplateExpander(
+internal sealed class TemplateExpander(
     ILoopBlockScanner scanner,
     ILoopBodyMasker masker,
     ICollectionSourceResolver sourceResolver,
@@ -22,7 +21,7 @@ internal sealed partial class TemplateExpander(
     private const string LoopIndexPrefix = "__teapie_loop_index_";
     private const string LoopLengthPrefix = "__teapie_loop_length_";
     private const string LoopOffsetPrefix = "__teapie_loop_offset_";
-    private const string ContinueOffset = "continue";
+    private const string TemplatingErrorPrefix = "Templating error";
     private const string GuardTargetName = "__teapie_loop_guard";
     private const string GuardFilterName = "__teapie_guard_loop_source";
 
@@ -51,6 +50,7 @@ internal sealed partial class TemplateExpander(
         }
 
         var blocks = FindLoopBlocks(scanner, content, filePath);
+        ValidateNestingDepth(blocks, filePath);
         var forSources = ParseForTagSources(blocks, filePath);
         var isDynamic = Enumerable.Range(0, blocks.Count).Select(i => IsDynamicSource(i, blocks, forSources)).ToArray();
 
@@ -65,16 +65,17 @@ internal sealed partial class TemplateExpander(
         var requestCounts = new int?[blocks.Count];
         var loopOutputs = new List<string>();
         var dataValues = new TemplateDataValues();
-        var template = WrapTopLevelLoops(
+        var template = WrapLoops(
             RenderedValueGuard.Apply(ParseTemplate(transformed, content, positionMap, filePath), dataValues), blocks,
-            topLevelIndices, requestCounts, loopOutputs, filePath);
+            forSources, topLevelIndices, requestCounts, loopOutputs, filePath);
 
         var usage = new DynamicSourceUsage[blocks.Count];
         var context = BuildRenderContext(blocks, forSources, sources, model, usage, filePath);
         var rendered = RenderTemplate(template, context, filePath);
         var warnedIndices = WarnAboutDynamicSourcesEmptyForEveryOuterItem(forSources, usage, filePath);
 
-        ValidateTopLevelLoopRequestCounts(requestCounts, blocks, forSources, topLevelIndices, warnedIndices, filePath);
+        WarnAboutTopLevelLoopsWithoutRequests(
+            requestCounts, blocks, forSources, topLevelIndices, warnedIndices, filePath);
 
         return new TemplateExpansionResult(rendered, FindTemplatedRequestNames(content, rendered, blocks, loopOutputs))
         {
@@ -123,11 +124,27 @@ internal sealed partial class TemplateExpander(
         }
     }
 
-    private static ForTagSource[] ParseForTagSources(IReadOnlyList<LoopBlock> blocks, string filePath)
+    private void ValidateNestingDepth(IReadOnlyList<LoopBlock> blocks, string filePath)
+    {
+        var depths = blocks.Select((_, i) => LoopBlockHierarchy.GetAncestorIndices(i, blocks).Count + 1).ToList();
+        var deepestIndex = depths.IndexOf(depths.DefaultIfEmpty(0).Max());
+
+        if (deepestIndex >= 0 && depths[deepestIndex] > limits.MaxNestingDepth)
+        {
+            throw new InvalidOperationException(
+                $"Templating error in '{filePath}': loops are nested {depths[deepestIndex]} levels deep, exceeding " +
+                $"the maximum of {limits.MaxNestingDepth} (innermost loop over " +
+                $"'{blocks[deepestIndex].SourceExpression}').");
+        }
+    }
+
+    private ForTagSource[] ParseForTagSources(IReadOnlyList<LoopBlock> blocks, string filePath)
     {
         try
         {
-            return blocks.Select(block => ForTagSourceParser.Parse(block.SourceExpression)).ToArray();
+            return blocks
+                .Select(block => ForTagSourceParser.Parse(block.SourceExpression, limits.MaxLoopItems))
+                .ToArray();
         }
         catch (InvalidOperationException ex)
         {
@@ -163,12 +180,11 @@ internal sealed partial class TemplateExpander(
                     "zero items.");
             }
 
-            var expandedCount = forSource.ApplyLiteralWindow(source.ItemCount);
-            if (LoopBlockHierarchy.IsStandaloneBlock(i, blocks) && expandedCount > limits.MaxExpandedRequests)
+            if (source.ItemCount > limits.MaxLoopItems)
             {
                 throw new InvalidOperationException(
-                    $"Templating error in '{filePath}': loop over '{forSource.CollectionExpression}' would expand " +
-                    $"to {expandedCount} requests, exceeding the maximum of {limits.MaxExpandedRequests}.");
+                    $"Templating error in '{filePath}': loop over '{forSource.CollectionExpression}' has " +
+                    $"{source.ItemCount} items, exceeding the maximum of {limits.MaxLoopItems} items per loop.");
             }
 
             var collection = source.Collection is not null ? $"{SourceAliasPrefix}{i}" : forSource.CollectionExpression;
@@ -215,7 +231,7 @@ internal sealed partial class TemplateExpander(
                 injected += $"{{% assign {LoopLengthPrefix}{parentIndex} = forloop.length %}}";
             }
 
-            if (parent.IsReversed && HasEvaluableOffset(parent))
+            if (parent.IsReversed && parent.OffsetExpression is not null)
             {
                 injected += $"{{% assign {LoopOffsetPrefix}{parentIndex} = {parent.OffsetExpression} %}}";
             }
@@ -236,18 +252,40 @@ internal sealed partial class TemplateExpander(
             .OrderBy(i => blocks[i].StartIndex)
             .ToList();
 
-    private static IFluidTemplate WrapTopLevelLoops(
-        IFluidTemplate template, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<int> topLevelIndices,
-        int?[] requestCounts, List<string> loopOutputs, string filePath)
+    private IFluidTemplate WrapLoops(
+        IFluidTemplate template, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources,
+        IReadOnlyList<int> topLevelIndices, int?[] requestCounts, List<string> loopOutputs, string filePath)
     {
+        var renderedLoopsLength = 0L;
+
         try
         {
-            return TopLevelLoopWrapper.Wrap(
+            return LoopWrapper.Wrap(
                 template,
                 topLevelIndices.Select(i => blocks[i].LoopVariableName).ToList(),
-                (loopIndex, output) =>
+                limits,
+                (loopIndex, requestCount, length) =>
                 {
-                    requestCounts[topLevelIndices[loopIndex]] = CountRequests(output);
+                    var source = forSources[topLevelIndices[loopIndex]].CollectionExpression;
+                    if (requestCount > limits.MaxExpandedRequests)
+                    {
+                        throw new InvalidOperationException(
+                            $"Templating error in '{filePath}': loop over '{source}' would expand to more than " +
+                            $"{limits.MaxExpandedRequests} requests, counted across all its nesting levels.");
+                    }
+
+                    if (renderedLoopsLength + length > limits.MaxExpandedLength)
+                    {
+                        throw new InvalidOperationException(
+                            $"Templating error in '{filePath}': the loops in the file would expand to more than " +
+                            $"{limits.MaxExpandedLength} characters (exceeded in the loop over '{source}'). Check " +
+                            "the loops for large bodies, or split the file.");
+                    }
+                },
+                (loopIndex, output, requestCount) =>
+                {
+                    requestCounts[topLevelIndices[loopIndex]] = requestCount;
+                    renderedLoopsLength += output.Length;
                     loopOutputs.Add(output);
                 });
         }
@@ -280,8 +318,10 @@ internal sealed partial class TemplateExpander(
     {
         var options = CreateMemberAccessOptions(filePath);
         options.MaxSteps = limits.MaxRenderSteps;
+        ValueSizeGuard.WrapFilters(options.Filters, limits);
         options.Filters.AddFilter(GuardFilterName, (input, arguments, context) =>
-            GuardDynamicSource(input, arguments, context, blocks, forSources, usage, filePath, logger));
+            GuardDynamicSource(
+                input, arguments, context, blocks, forSources, usage, limits.MaxLoopItems, filePath, logger));
 
         var model = new Dictionary<string, object?>(variablesModel);
         for (var i = 0; i < blocks.Count; i++)
@@ -297,7 +337,8 @@ internal sealed partial class TemplateExpander(
 
     private static ValueTask<FluidValue> GuardDynamicSource(
         FluidValue input, FilterArguments arguments, TemplateContext context, IReadOnlyList<LoopBlock> blocks,
-        IReadOnlyList<ForTagSource> forSources, DynamicSourceUsage[] usage, string filePath, ILogger logger)
+        IReadOnlyList<ForTagSource> forSources, DynamicSourceUsage[] usage, int maxItems, string filePath,
+        ILogger logger)
     {
         var blockIndex = (int)arguments.At(0).ToNumberValue();
         var forSource = forSources[blockIndex];
@@ -311,9 +352,18 @@ internal sealed partial class TemplateExpander(
                 $"'{{% for %}}' loop must be a collection ({outerItemPath}).");
         }
 
+        var itemCount = enumerable.Cast<object?>().Take(maxItems + 1).Count();
+        if (itemCount > maxItems)
+        {
+            throw new InvalidOperationException(
+                $"Templating error in '{filePath}': loop over '{forSource.CollectionExpression}' has more than " +
+                $"{maxItems} items ({FormatOuterItemPath(blockIndex, blocks, forSources, context)}), exceeding the " +
+                $"maximum of {maxItems} items per loop.");
+        }
+
         usage[blockIndex].Evaluated++;
 
-        if (enumerable.Cast<object?>().Any())
+        if (itemCount > 0)
         {
             usage[blockIndex].NonEmpty++;
             return new ValueTask<FluidValue>(NilValue.Instance);
@@ -384,15 +434,12 @@ internal sealed partial class TemplateExpander(
         }
 
         var length = context.GetValue($"{LoopLengthPrefix}{blockIndex}").ToNumberValue();
-        var offset = HasEvaluableOffset(forSource)
+        var offset = forSource.OffsetExpression is not null
             ? context.GetValue($"{LoopOffsetPrefix}{blockIndex}").ToNumberValue()
             : 0;
 
         return length - 1 - index + offset;
     }
-
-    private static bool HasEvaluableOffset(ForTagSource forSource)
-        => forSource.OffsetExpression is { } offset && offset != ContinueOffset;
 
     private string RenderTemplate(IFluidTemplate template, TemplateContext context, string filePath)
     {
@@ -400,39 +447,38 @@ internal sealed partial class TemplateExpander(
         {
             return template.Render(context);
         }
-        catch (InvalidOperationException ex) when (IsRenderStepLimitExceeded(ex))
+        catch (InvalidOperationException ex) when (IsRenderStepLimitExceeded(context))
         {
             throw new InvalidOperationException(
                 $"Templating error in '{filePath}': template exceeded the maximum of {limits.MaxRenderSteps} " +
-                "rendering steps across the whole file - likely too many '{{ }}' " +
-                "expressions per item rather than a large collection (collection size is capped separately " +
-                "per loop). Check the file for repeated expressions, or split it into smaller loops.", ex);
+                "rendering steps across the whole file - for example too many '{{ }}' expressions per item, or " +
+                "nested loops that together run too many times. Check the file for repeated expressions, or " +
+                "split it into smaller loops.", ex);
+        }
+        catch (InvalidOperationException ex)
+            when (ex.Message.StartsWith(TemplatingErrorPrefix + ": ", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Templating error in '{filePath}': {StripTemplatingErrorPrefix(ex.Message)}", ex);
+        }
+        catch (Exception ex) when (IsUnreportedRenderError(ex))
+        {
+            throw new InvalidOperationException(
+                $"Templating error in '{filePath}': rendering failed: {ex.Message}", ex);
         }
     }
 
-    private static int CountRequests(string output)
-        => RequestSeparatorRegex().Split(output).Count(fragment => RequestMethodAndUriLineRegex().IsMatch(fragment));
+    private static bool IsUnreportedRenderError(Exception ex)
+        => ex is not (OutOfMemoryException or OperationCanceledException)
+            && !ex.Message.StartsWith(TemplatingErrorPrefix, StringComparison.Ordinal);
 
-    private void ValidateTopLevelLoopRequestCounts(
+    private void WarnAboutTopLevelLoopsWithoutRequests(
         int?[] requestCounts, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources,
         IReadOnlyList<int> topLevelIndices, IReadOnlySet<int> warnedIndices, string filePath)
     {
         foreach (var rootIndex in topLevelIndices)
         {
-            if (requestCounts[rootIndex] is not { } requestCount)
-            {
-                continue;
-            }
-
-            if (requestCount > limits.MaxExpandedRequests && LoopBlockHierarchy.IsNestingRoot(rootIndex, blocks))
-            {
-                throw new InvalidOperationException(
-                    $"Templating error in '{filePath}': the nested loop tree would expand to {requestCount} " +
-                    "requests combined across all nesting levels, exceeding the maximum of " +
-                    $"{limits.MaxExpandedRequests} (root loop over '{forSources[rootIndex].CollectionExpression}').");
-            }
-
-            if (requestCount == 0 && DeclaresRequests(blocks[rootIndex])
+            if (requestCounts[rootIndex] == 0 && DeclaresRequests(blocks[rootIndex])
                 && !warnedIndices.Any(index => LoopBlockHierarchy.GetAncestorIndices(index, blocks).Contains(rootIndex)))
             {
                 logger.LogWarning(
@@ -445,7 +491,7 @@ internal sealed partial class TemplateExpander(
         }
     }
 
-    private static bool DeclaresRequests(LoopBlock block) => RequestMethodAndUriLineRegex().IsMatch(block.Body);
+    private static bool DeclaresRequests(LoopBlock block) => RequestCountingWriter.ContainsRequestLine(block.Body);
 
     private static IReadOnlyList<LoopBlock> FindLoopBlocks(ILoopBlockScanner scanner, string content, string filePath)
     {
@@ -485,26 +531,28 @@ internal sealed partial class TemplateExpander(
 
     private static string StripTemplatingErrorPrefix(string message)
     {
-        const string prefix = "Templating error: ";
+        const string prefix = TemplatingErrorPrefix + ": ";
         return message.StartsWith(prefix, StringComparison.Ordinal) ? message[prefix.Length..] : message;
     }
 
-    private static bool IsRenderStepLimitExceeded(InvalidOperationException ex)
-        => ex.Message.Contains(FluidMessageFormats.RenderStepLimitMarker, StringComparison.OrdinalIgnoreCase);
+    // Fluid reports the step limit with the same message as its recursion limit, so the step counter decides:
+    // once the limit was exceeded, every further step is rejected too.
+    private static bool IsRenderStepLimitExceeded(TemplateContext context)
+    {
+        try
+        {
+            context.IncrementSteps();
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return true;
+        }
+    }
 
     private static bool IsDynamicSource(
         int blockIndex, IReadOnlyList<LoopBlock> blocks, IReadOnlyList<ForTagSource> forSources)
         => LoopBlockHierarchy.GetAncestorIndices(blockIndex, blocks).Exists(ancestorIndex =>
             FluidExpressionIdentifier.StartsWithIdentifier(
                 forSources[blockIndex].CollectionExpression, blocks[ancestorIndex].LoopVariableName));
-
-    [GeneratedRegex(
-        HttpFileParserConstants.HttpRequestSeparatorDirectiveLineRegex,
-        RegexOptions.None, TemplatingLimits.RegexTimeoutMilliseconds)]
-    private static partial Regex RequestSeparatorRegex();
-
-    [GeneratedRegex(
-        HttpFileParserConstants.RequestMethodAndUriLinePattern,
-        RegexOptions.IgnoreCase, TemplatingLimits.RegexTimeoutMilliseconds)]
-    private static partial Regex RequestMethodAndUriLineRegex();
 }
