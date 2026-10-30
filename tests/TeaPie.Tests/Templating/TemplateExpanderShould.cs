@@ -237,6 +237,19 @@ public class TemplateExpanderShould
     }
 
     [Fact]
+    public void ShowTheRawHintOnItsOwnLineWhenParsingFails()
+    {
+        var act = () => Expand("{% assign d = 1 %}\n{\"fmt\":\"{%Y-%m-%d}\"}");
+
+        act.Should().Throw<InvalidOperationException>().Which.Message.Should().Be(
+            $"Templating error in '{FilePath}': failed to parse template: Unknown tag 'Y' at (2:12)\n" +
+            "Source:\n" +
+            "{\"fmt\":\"{%Y-%m-%d}\"}\n" +
+            "If this file contains literal '{%' text that is not a TeaPie template tag, wrap it in " +
+            "'{% raw %}...{% endraw %}'.");
+    }
+
+    [Fact]
     public void ThrowAClearErrorWhenScanningTheFileTimesOut()
     {
         // The '{% for %}' tag pattern is quadratic in the length of a line that never closes the tag.

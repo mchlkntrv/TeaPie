@@ -262,9 +262,9 @@ internal sealed partial class TemplateExpander(
             var originalError =
                 FluidParseErrorMapper.RemapToOriginal(parseError, originalContent, transformed, positionMap);
             throw new InvalidOperationException(
-                $"Templating error in '{filePath}': failed to parse template: {originalError}. If this file " +
-                "contains literal '{{%' text that is not a TeaPie template tag, wrap it in " +
-                "'{{% raw %}}...{{% endraw %}}'.");
+                $"Templating error in '{filePath}': failed to parse template: {originalError}\n" +
+                "If this file contains literal '{%' text that is not a TeaPie template tag, wrap it in " +
+                "'{% raw %}...{% endraw %}'.");
         }
 
         return template;
