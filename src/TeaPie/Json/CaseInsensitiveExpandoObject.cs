@@ -21,6 +21,8 @@ public class CaseInsensitiveExpandoObject : DynamicObject
         }
     }
 
+    internal IDictionary<string, object?> Properties => _properties;
+
     public override bool TryGetMember(GetMemberBinder binder, out object? result)
         => _properties.TryGetValue(binder.Name, out result);
 
