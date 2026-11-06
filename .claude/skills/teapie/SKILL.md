@@ -1,6 +1,6 @@
 ---
 name: teapie
-description: Comprehensive TeaPie framework expertise for API integration testing. Use when: (1) Working with TeaPie projects, API testing, .http files, .tp files, C# test scripts (.csx), test collections, directives, variables, functions, authentication, retrying, (2) Creating and scaffolding test cases using `teapie generate`, renumbering tests, initializing TeaPie projects, (3) Running tests with `teapie test`, finding tests for API endpoints, debugging test failures, generating reports, (4) Analyzing .teapie folder structure, discovering custom functions/directives/auth providers registered in init.csx, understanding project-specific configurations, or (5) When users need guidance on TeaPie CLI commands, test structure, framework capabilities, or test organization.
+description: Comprehensive TeaPie framework expertise for API integration testing. Use when: (1) Working with TeaPie projects, API testing, .http files, .tp files, C# test scripts (.csx), test collections, directives, variables, functions, authentication, retrying, templating loops (`{% for %}`/`{% endfor %}` data-driven request expansion), (2) Creating and scaffolding test cases using `teapie generate`, renumbering tests, initializing TeaPie projects, (3) Running tests with `teapie test`, finding tests for API endpoints, debugging test failures, generating reports, (4) Analyzing .teapie folder structure, discovering custom functions/directives/auth providers registered in init.csx, understanding project-specific configurations, or (5) When users need guidance on TeaPie CLI commands, test structure, framework capabilities, or test organization.
 ---
 
 # TeaPie Framework
@@ -111,6 +111,39 @@ Built-in functions:
 - `{{$randomInt min max}}` - Random integer [min, max)
 
 Custom functions can be registered in `init.csx`.
+
+### Templating Loops
+
+Requires TeaPie 1.8.0 or newer. Older versions send the tags as literal text.
+
+Expand a single request block into many independent requests, driven by a collection:
+
+```http
+{% for partner in Partners %}
+### Create partner {{ forloop.index }}: {{ partner.Name }}
+# @name CreatePartner{{ forloop.index }}
+POST {{ApiBaseUrl}}/partners
+Content-Type: application/json
+
+{ "name": "{{ partner.Name }}" }
+{% endfor %}
+```
+
+**Sources:** a variable set via `tp.SetVariable(...)` (most common), an inline literal list `("new", "used")`, or a numeric range `(1..5)`.
+
+**`forloop`:** `forloop.index` (1-based), `forloop.index0` (0-based), `forloop.first`, `forloop.last`.
+
+**Key rules:** every `# @name` in a file must be unique after expansion: put `{{ forloop.index }}` in each name inside a loop (in nested loops combine the outer and inner index, e.g. `CreateLicense{{ companyIndex }}_{{ forloop.index }}`), and don't repeat a name outside loops, within one loop body, or reuse it for a loop-generated one (each is an error; only a literal name written once per loop body and repeated by iterations is a warning); loops can be nested (capture an outer `forloop.index` via `{% assign x = forloop.index %}` before the inner loop, since the inner loop's `forloop` shadows the outer one); expansion is capped at 1000 items per loop and 1000 generated requests per top-level loop (nested loops included); a missing, `null` or non-collection source (a string included) is always a hard error, for inner loops as well; an empty source is a hard error for a top-level loop (even with an `{% else %}` branch). An inner loop whose source references an outer loop's variable (e.g. `company.Licenses`) may be empty for some outer items. Each such item gets a **Debug** log message, and a **Warning** is logged when the source is empty for every outer item (unless the inner loop's own `{% else %}` branch declares a request). A rendered value with a line break or `###`, or with `{{`/`}}` not written as text in the same `{{ }}` expression, is inserted only after the file is split into requests (it shows as `{{__teapie_value_N}}` in `--dump-expanded`), so data can't add requests or resolve other variables.
+
+**Also:**
+- Only a file containing `{% for %}`, `{% if %}`, `{% unless %}`, `{% assign %}` or `{% raw %}` is templated. In such a file every `{%` is template syntax, comment lines included, so wrap literal `{%` text in `{% raw %}...{% endraw %}`.
+- Variables tagged `secret` are not visible to templates, and using one as a loop source is an error.
+- `{% assign %}` is local to the file: it never sets a TeaPie variable.
+- A dotted variable name (`Temp.Flag`) works only as a loop source.
+- A tag on its own line between the request line and the body (among the headers) needs `{%-`, otherwise its empty line ends the headers.
+- `teapie test --dump-expanded` prints the expanded file. `--dump-expanded-dir <dir>` writes it to a directory, which must be outside the tested collection.
+
+See [Templating Loops Reference](references/templating-loops.md) for full syntax, guards, and the nested-loop example.
 
 ## C# Scripting (.csx Files)
 
@@ -452,6 +485,7 @@ The `init.csx` script runs before the first test case. Use it to:
 - [CLI Commands Reference](references/cli-commands.md) - Complete command documentation
 - [Directives Reference](references/directives.md) - All directives with examples
 - [Variables & Functions Reference](references/variables-functions.md) - Variable system and functions
+- [Templating Loops Reference](references/templating-loops.md) - `{% for %}` request expansion, nesting, guards
 - [Test Structure Reference](references/test-structure.md) - Test case and collection structure
 - [OpenAPI to Tests Guide](references/openapi-to-tests.md) - Creating tests from OpenAPI specs
 - [Test Mapping Patterns](references/test-mapping-patterns.md) - API-to-test mapping strategies
@@ -474,3 +508,4 @@ The `init.csx` script runs before the first test case. Use it to:
 - `templates/basic-delete.http` - DELETE request template
 - `templates/with-auth.http` - Request with authentication
 - `templates/with-retry.http` - Request with retry strategy
+- `templates/with-loop.http` - Request block expanded via a `{% for %}` templating loop

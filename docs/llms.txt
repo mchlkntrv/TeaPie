@@ -35,6 +35,7 @@ Key conventions:
 - [Initialization Script](https://raw.githubusercontent.com/Kros-sk/TeaPie/master/docs/docs/initialization-script.md): `init.csx` that runs before the collection
 - [Variables](https://raw.githubusercontent.com/Kros-sk/TeaPie/master/docs/docs/variables.md): variable scopes and syntax
 - [Functions](https://raw.githubusercontent.com/Kros-sk/TeaPie/master/docs/docs/functions.md): built-in and custom functions
+- [Templating Loops](https://raw.githubusercontent.com/Kros-sk/TeaPie/master/docs/docs/templating-loops.md): expand one request block into many requests with `{% for %}`, plus `{% if %}` and `{% assign %}` (TeaPie 1.8.0+)
 - [Environments](https://raw.githubusercontent.com/Kros-sk/TeaPie/master/docs/docs/environments.md): `env.json` and switching environments
 - [Authentication](https://raw.githubusercontent.com/Kros-sk/TeaPie/master/docs/docs/authentication.md): OAuth2 and custom auth providers
 - [Retrying](https://raw.githubusercontent.com/Kros-sk/TeaPie/master/docs/docs/retrying.md): retry strategies and conditions

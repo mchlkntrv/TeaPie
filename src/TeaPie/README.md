@@ -46,12 +46,15 @@ var app = appBuilder
     .WithReportFile("path/to/report-file.xml")
     .WithInitializationScript("path/to/my/init-script.csx")
     .WithVariablesCaching(false)
+    .WithExpandedContentDump("path/to/dump-folder")
     .WithDefaultPipeline(); // Default pipeline runs tests
     // .WithStructureExplorationPipeline() - to show structure
     .Build();
 
 await app.Run(CancellationToken.None);
 ```
+
+`WithExpandedContentDump()` shows each templated requests file after its [templates are expanded](https://www.teapie.fun/docs/templating-loops.html). With no argument (or an empty string) it prints the files to the console. With a directory it writes them there instead; a relative path is resolved against the current working directory, and the directory must be outside the tested collection.
 
 ## 🤝 Contributing
 
