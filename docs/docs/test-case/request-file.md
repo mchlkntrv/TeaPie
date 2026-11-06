@@ -44,3 +44,23 @@ For **named requests**, you can access request and response data using the follo
 ```
 
 This gives you comprehensive access to headers and body content of named requests.
+
+### Templating Loops
+
+A request block can be repeated for every item in a collection using a `{% for %}` ... `{% endfor %}` loop, turning one request definition into many independent requests:
+
+```http
+{% for partner in Partners %}
+### Create partner {{ forloop.index }}: {{ partner.Name }}
+# @name CreatePartner{{ forloop.index }}
+## TEST-EXPECT-STATUS: [201]
+POST {{ApiBaseUrl}}/partners
+Content-Type: application/json
+
+{ "name": "{{ partner.Name }}" }
+{% endfor %}
+```
+
+`Partners` is a collection set beforehand (typically in the pre-request script via `tp.SetVariable(...)`). Each iteration keeps its own name, directives, retry handling and report entry, exactly as if the block had been copy-pasted N times.
+
+See [Templating Loops](../templating-loops.md) for the full syntax, all supported collection sources, and current limitations.
