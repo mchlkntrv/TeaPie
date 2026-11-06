@@ -3,6 +3,7 @@
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="Dunet" Version="1.11.2" />
     <PackageVersion Include="FluentAssertions" Version="7.0.0" />
+    <PackageVersion Include="Fluid.Core" Version="2.31.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis" Version="4.13.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Scripting" Version="4.13.0" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="9.0.2" />

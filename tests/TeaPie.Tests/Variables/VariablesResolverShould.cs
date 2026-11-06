@@ -2,6 +2,7 @@
 using NSubstitute;
 using System.Text;
 using TeaPie.Http;
+using TeaPie.TestCases;
 using TeaPie.Variables;
 
 namespace TeaPie.Tests.Variables;
@@ -86,6 +87,21 @@ public class VariablesResolverShould
 
         variables.SetVariable(VariableName, variableValue);
         resolver.ResolveVariablesInLine(line, context).Should().BeEquivalentTo(resolvedLine);
+    }
+
+    [Fact]
+    public void ResolveTemplateDataValuesAsLiteralText()
+    {
+        var variables = new global::TeaPie.Variables.Variables();
+        variables.SetVariable("apiKey", "SECRET", "secret");
+        var resolver = new VariablesResolver(variables, Substitute.For<IServiceProvider>());
+        var testCaseContext = new TestCaseExecutionContext(null!)
+        {
+            TemplateDataValues = new Dictionary<string, string> { ["__teapie_value_1"] = "{{apiKey}}\n###" }
+        };
+
+        resolver.ResolveVariablesInLine("GET /{{__teapie_value_1}}/{{apiKey}}", new(null!, testCaseContext))
+            .Should().Be("GET /{{apiKey}}\n###/SECRET");
     }
 
     [Fact]
