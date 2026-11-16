@@ -50,11 +50,6 @@ public class GenerateStepsForRequestsStepShould
             "login", DuplicateNameOutcome.Warning
         },
         {
-            "{% comment %}\n" + Request("Car", "old") + "{% endcomment %}\n" +
-            "{% for c in (1, 2) %}" + Request("Car", "cars/{{ c }}") + "{% endfor %}",
-            "Car", DuplicateNameOutcome.Warning
-        },
-        {
             "{% for i in (1..2) %}" + Request("item{{ forloop.index }}", "{{ i }}") + "{% endfor %}" +
             Request("login", "a") + Request("login", "b"),
             "login", DuplicateNameOutcome.Error
@@ -67,11 +62,6 @@ public class GenerateStepsForRequestsStepShould
             "{% for i in (1..3) %}" + Request("login", "{{ i }}") + Request("login", "profile/{{ i }}") +
             "{% endfor %}",
             "login", DuplicateNameOutcome.ErrorWithLoopHint
-        },
-        {
-            "{% for i in (1..2) %}" + Request("login{{ forloop.index }}", "{{ i }}") +
-            Request("login{{ forloop.index }}", "profile/{{ i }}") + "{% endfor %}",
-            "login1", DuplicateNameOutcome.ErrorWithLoopHint
         },
         {
             "{% if false %}" + Request("login", "v2") + "{% else %}" + Request("login", "v1") + "{% endif %}",

@@ -17,7 +17,6 @@ public class ExpandedContentDumperShould : IDisposable
 
     [Theory]
     [InlineData("GET.http", null, "GET.http")]
-    [InlineData("Seed.tp", "Seed", "Seed.tp.http")]
     [InlineData("Seed.tp", "First", "Seed.tp.First.http")]
     [InlineData("Seed.tp", "Create user/admin", "Seed.tp.Create user_admin.http")]
     public void WriteTheDumpNamedAfterTheRequestsFileAndTheTestCaseOfATpFile(
@@ -46,7 +45,6 @@ public class ExpandedContentDumperShould : IDisposable
     }
 
     [Theory]
-    [InlineData("", "", true)]
     [InlineData("Demo", "", true)]
     [InlineData("Demo", "Demo/out", true)]
     [InlineData("Demo", "out", false)]

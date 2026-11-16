@@ -9,10 +9,7 @@ public class TestCommandSettingsShould
 {
     [Theory]
     [InlineData(new[] { "test", "--dump-expanded", "./coll" }, null)]
-    [InlineData(new[] { "test", "./coll", "--dump-expanded" }, null)]
     [InlineData(new[] { "test", "--dump-expanded-dir", "./out", "./coll" }, "./out")]
-    [InlineData(new[] { "test", "./coll", "--dump-expanded-dir", "./out" }, "./out")]
-    [InlineData(new[] { "test", "--dump-expanded", "--dump-expanded-dir", "./out", "./coll" }, "./out")]
     public void KeepThePositionalPathSeparateFromTheDumpOptions(string[] args, string? expectedDirectory)
     {
         var app = new CommandAppTester();

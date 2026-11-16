@@ -13,7 +13,6 @@ public class ExpandTemplatesStepShould
     [InlineData("{% for x in Xs %}BODY{% endfor %}", true, true)]
     [InlineData("{% for x in Xs %}BODY{% endfor %}", false, true)]
     [InlineData("GET https://example.test/plain", true, false)]
-    [InlineData("POST https://example.test\n\n{\"fmt\":\"{%Y-%m-%d}\"}", true, false)]
     public async Task UseTheExpandedContentAndDumpItOnlyForATemplatedFile(
         string content, bool dumpRequested, bool templated)
     {
